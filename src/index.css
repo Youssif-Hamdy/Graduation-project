@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+
+.leaflet-container {
+    width: 300px; 
+    height: 200px; 
+    border-radius: 15px; 
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); 
+  }
+  
+  .map-container {
+    position: fixed;
+    top: 30px;
+    left: 20px; 
+    z-index: 1000; 
+  }
+.react-chatbot-kit-chat-bot-avatar-container,
+.react-chatbot-kit-user-chat-message-container {
+  display: none;
+}
