@@ -3,30 +3,33 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [Email, setEmail] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+
   const navigate = useNavigate();
 
-  // مراقبة التغييرات في localStorage
   useEffect(() => {
     const checkLoginStatus = () => {
       const token = localStorage.getItem('token');
+      const storedUsername = localStorage.getItem('Email');
       if (token) {
         setIsLoggedIn(true);
+        if (storedUsername) {
+          setEmail(storedUsername);
+        }
       } else {
         setIsLoggedIn(false);
+        setEmail('');
       }
     };
 
-    // تحقق من حالة تسجيل الدخول عند تحميل الصفحة
     checkLoginStatus();
 
-    // استمع لتغييرات localStorage
     window.addEventListener('storage', checkLoginStatus);
 
-    // تنظيف الـ event listener عند إلغاء التحميل
     return () => {
       window.removeEventListener('storage', checkLoginStatus);
     };
@@ -37,32 +40,69 @@ const Navbar: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    const confirmLogout = window.confirm('Are you sure you want to log out?');
-    if (!confirmLogout) return;
+    // عرض رسالة تأكيد باستخدام toast
+    toast(
+      <div>
+        <p>Are you sure you want to log out?</p>
+        <div className="flex justify-around mt-3">
+          <button
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            onClick={() => {
+              toast.dismiss(); // إغلاق الرسالة
+              performLogout(); // تنفيذ تسجيل الخروج
+            }}
+          >
+            Yes
+          </button>
+          <button
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            onClick={() => toast.dismiss()} // إغلاق الرسالة دون تنفيذ أي شيء
+          >
+            No
+          </button>
+        </div>
+      </div>,
+      {
+        position: 'top-center',
+        autoClose: false, // عدم إغلاق الرسالة تلقائياً
+        closeButton: false, // إخفاء زر الإغلاق الافتراضي
+        closeOnClick: false, // عدم إغلاق الرسالة عند النقر خارجها
+        draggable: false, // منع سحب الرسالة
+      }
+    );
+  };
 
+  const performLogout = async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
+      console.log('Refresh Token:', refreshToken);
       if (!refreshToken) {
         throw new Error('No refresh token found');
       }
-
-      const response = await fetch('https://smartpharmanet-production.up.railway.app/account/logout/', {
+    
+      const response = await fetch('https://smart-pharma-net.vercel.app/account/logout/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`, // إذا كان الخادم يتطلب ذلك
+
         },
         body: JSON.stringify({ refresh: refreshToken }),
       });
-
       const data = await response.json();
       console.log("Logout response:", data);
-
+    
       if (!response.ok) {
         throw new Error(data.message || 'Failed to log out');
       }
-
+    
       localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('userLocation');
+      localStorage.removeItem('askedForLocation');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('Email');
+    
       setIsLoggedIn(false);
       toast.success('Logged out successfully!');
       navigate('/signin');
@@ -70,6 +110,11 @@ const Navbar: React.FC = () => {
       console.error('Logout error:', err);
       toast.error(err.message || 'An error occurred during logout. Please try again.');
     }
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return '';
+    return name.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -100,7 +145,7 @@ const Navbar: React.FC = () => {
           <ul className="hidden absolute top-1/2 left-1/2 transform -translate-y-1/2 -translate-x-1/2 lg:flex lg:mx-auto lg:items-center lg:w-auto lg:space-x-6">
             <li>
               <NavLink
-                to="/"
+                to="/home"
                 className={({ isActive }) => `text-sm ${isActive ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-500'}`}
               >
                 Home
@@ -139,7 +184,7 @@ const Navbar: React.FC = () => {
             </li>
             <li>
               <NavLink
-                to="/medicines"
+                to="/availablemedicine"
                 className={({ isActive }) => `text-sm ${isActive ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-500'}`}
               >
                 Available Medicine
@@ -147,12 +192,31 @@ const Navbar: React.FC = () => {
             </li>
           </ul>
           {isLoggedIn ? (
-            <button
-              className="hidden lg:inline-block lg:ml-auto lg:mr-3 py-2 px-6 bg-red-500 hover:bg-red-600 text-sm text-white font-bold rounded-xl transition duration-200"
-              onClick={handleLogout}
-            >
-              Logout
-            </button>
+            <div className="hidden lg:flex items-center space-x-4 relative">
+              <Link className="ml-4" to="/cart">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L4 3m0 0H3m4 10a1 1 0 100 2 1 1 0 000-2zm10 0a1 1 0 100 2 1 1 0 000-2z"></path>
+                </svg>
+              </Link>
+              <div
+                className="flex w-12 h-12 items-center justify-center bg-indigo-600 text-white rounded-full hover:bg-indigo-700 hover:shadow-lg active:scale-95 transition-all duration-200 cursor-pointer shadow-md"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <span className="text-lg font-semibold">
+                  {getInitials(Email)}
+                </span>
+              </div>
+              {isDropdownOpen && (
+                <div className="absolute top-14 right-0 bg-white border border-gray-200 rounded-lg shadow-lg">
+                  <button
+                    className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <Link
               className="hidden lg:inline-block lg:ml-auto lg:mr-3 py-2 px-6 bg-indigo-500 hover:bg-indigo-600 text-sm text-white font-bold rounded-xl transition duration-200"
@@ -161,11 +225,6 @@ const Navbar: React.FC = () => {
               Sign In/Up
             </Link>
           )}
-          <Link className="hidden lg:inline-block ml-4" to="/cart">
-            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L4 3m0 0H3m4 10a1 1 0 100 2 1 1 0 000-2zm10 0a1 1 0 100 2 1 1 0 000-2z"></path>
-            </svg>
-          </Link>
         </div>
       </nav>
       <div className={`navbar-menu relative z-50 ${isMenuOpen ? '' : 'hidden'}`}>
@@ -186,10 +245,17 @@ const Navbar: React.FC = () => {
             </button>
           </div>
           <div className="mt-20">
+            <div className="flex items-center space-x-4 sm:hidden">
+              <div className="flex w-12 h-12 items-center justify-center bg-indigo-600 text-white rounded-full hover:bg-indigo-700 hover:shadow-lg active:scale-95 transition-all duration-200 cursor-pointer shadow-md border-2 border-indigo-700">
+                <span className="text-lg font-semibold">
+                  {getInitials(Email)}
+                </span>
+              </div>
+            </div>
             <ul>
               <li className="mb-1">
                 <NavLink
-                  to="/"
+                  to="/home"
                   className={({ isActive }) =>
                     `block p-4 text-sm font-semibold ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:bg-indigo-50 hover:text-indigo-600'} rounded`
                   }
@@ -222,8 +288,8 @@ const Navbar: React.FC = () => {
               </li>
               <li className="mb-1">
                 <NavLink
-                  to="/medicines"
-                  className={({ isActive }) =>
+                to="/availablemedicine"
+                className={({ isActive }) =>
                     `block p-4 text-sm font-semibold ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:bg-indigo-50 hover:text-indigo-600'} rounded`
                   }
                   onClick={toggleMenu}

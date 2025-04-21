@@ -1,72 +1,59 @@
-import { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import 'animate.css';
-import RootLayout from "./pages/Layout";
+import { Routes, Route, Navigate } from "react-router-dom";
+import RootLayout from "./pages/Layout"; // استيراد الـ RootLayout
 import Home from "./pages/Home";
 import SignIn from "./pages/SignIn";
 import About from "./pages/About";
+import AvailableMedicine from "./pages/AvailableMedicine";
+import MedicinePage from "./pages/MedicinePage";
+import Start from "./pages/Start";
+import PharmacyLogin from "./pages/PharmacyLogin";
+import Exchange from "./pages/Exchange";
 
-interface ToastProps {
-  message: string;
-}
+// ProtectedRoute Component (لحماية الصفحات المخصصة للأدمن)
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isLoggedIn = localStorage.getItem("token"); 
 
-const Toast: React.FC<ToastProps> = ({ message }) => {
-  const [visible, setVisible] = useState<boolean>(false);
+  if (!isLoggedIn) {
+    return <Navigate to="/signin" replace />; 
+  }
 
-  useEffect(() => {
-    if (message) {
-      setVisible(true);
-      const timer = setTimeout(() => {
-        setVisible(false);
-      }, 3000); 
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
-
-  return (
-    visible && (
-      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-6 py-3 rounded-full animate__animated animate__fadeIn">
-        {message}
-      </div>
-    )
-  );
+  return <>{children}</>; 
 };
 
 const App: React.FC = () => {
-  const [toastMessage, setToastMessage] = useState<string>('');
-  // @ts-ignore
-  const [isFirstVisit, setIsFirstVisit] = useState<boolean>(true);
-
-  useEffect(() => {
-    const isAlreadyVisited = sessionStorage.getItem('hasVisited');
-    
-    if (!isAlreadyVisited) {
-      setTimeout(() => {
-        setToastMessage('Please Sign In');
-      }, 3000);
-      
-      sessionStorage.setItem('hasVisited', 'true');
-    }
-  }, []);
-
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<RootLayout />}>
-          <Route index element={<Home />} />
-          <Route path="signin" element={<SignIn />} />
-          <Route path="about" element={<About />} />
+    <Routes>
+      
+      <Route path="/start" element={<Start />} />
+
+      <Route path="/signin" element={<SignIn />} />
+
+      <Route path="/" element={<RootLayout />}>
+        <Route index element={<Navigate to="/start" replace />} /> 
+        <Route path="home" element={<Home />} /> 
+        <Route path="about" element={<About />} /> 
+        <Route path="availablemedicine" element={<AvailableMedicine />} /> 
+        <Route path="medicine" element={<MedicinePage />} /> 
+        <Route path="/pharmacy-login" element={<PharmacyLogin />} /> 
+        <Route path="/exchange" element={<Exchange />} /> 
 
 
-         
+      </Route>
 
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <RootLayout>
+              <div>Admin Dashboard</div>
+            </RootLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        </Route>
-      </Routes>
-
-      <Toast message={toastMessage} />
-    </BrowserRouter>
+      <Route path="*" element={<Navigate to="/start" replace />} />
+    </Routes>
   );
-}
+};
 
 export default App;
