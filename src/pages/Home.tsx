@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { FaAllergies, FaBox, FaCalendarAlt, FaCamera, FaCapsules, FaChevronLeft, FaChevronRight, FaDollarSign, FaFileAlt, FaFlask, FaHeadset, FaHeartbeat, FaImage, FaInfoCircle, FaMapMarkerAlt, FaMicrophone, FaPills, FaPrescriptionBottleAlt, FaSearch, FaShieldAlt, FaSyringe, FaTimes, FaTruck } from "react-icons/fa";
+import { FaAllergies, FaBox, FaCalendarAlt, FaCamera, FaCapsules, FaChevronDown, FaChevronLeft, FaChevronRight, FaDollarSign, FaFileAlt, FaFlask, FaHeadset, FaHeartbeat, FaImage, FaInfoCircle, FaMapMarkerAlt, FaMicrophone, FaPills, FaPrescriptionBottleAlt, FaSearch, FaShieldAlt, FaSpinner, FaSyringe, FaTimes, FaTruck } from "react-icons/fa";
 import Tesseract from 'tesseract.js';
 
 interface PharmacyLocation {
@@ -66,10 +66,14 @@ function Home() {
   const [isListening, setIsListening] = useState(false); // حالة للتعرف على ما إذا كان الميكروفون يعمل
   const recognitionRef = useRef<any>(null); // reference للتعرف على الصوت
   const [interimResult, setInterimResult] = useState("");
+  // @ts-ignore
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+const [sortBy, setSortBy] = useState<string>('');
   
 
 
@@ -79,6 +83,13 @@ function Home() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      
+      // Validate file type
+      if (!file.type.match('image.*')) {
+        toast.error("Please upload an image file");
+        return;
+      }
+      
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
       processImage(file);
@@ -89,63 +100,125 @@ function Home() {
   const processImage = async (file: File) => {
     setIsProcessingImage(true);
     try {
+      // First try the API
+      const apiResult = await tryOcrApi(file);
+      if (apiResult.success) {
+        const cleanedText = cleanOCRText(apiResult.text);
+        setSearchQuery(cleanedText);
+        findBestMedicineMatch(cleanedText);
+        return;
+      }
+      
+      // Fallback to Tesseract.js
+      console.log("Falling back to Tesseract.js");
       const { data: { text } } = await Tesseract.recognize(
         file,
-        'eng+ara', 
-        {
-          logger: m => console.log(m)
-        }
+        'eng+ara',
       );
       
-      // تحسين النص المقروء
       const cleanedText = cleanOCRText(text);
       setSearchQuery(cleanedText);
-      
-      // البحث عن أفضل تطابق للأدوية
       findBestMedicineMatch(cleanedText);
       
     } catch (error) {
-      console.error("Error processing image:", error);
-      toast.error("Failed to read text from image");
+      console.error("Both OCR methods failed:", error);
+      toast.error("Failed to read text from image using all methods");
     } finally {
       setIsProcessingImage(false);
     }
   };
+  
+  const tryOcrApi = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const API_KEY = '49uxSMbwpDFun_j4ONmMHl7NlQojQPwTZ0UrQ1pzQf0';
 
-  // تنظيف النص المقروء من OCR
-  const cleanOCRText = (text: string): string => {
-    // قائمة بالكلمات التي تريد إزالتها (يمكنك إضافة المزيد)
-    const sensitiveWords = [
-      'اسم', 'الاسم', 'مريض', 'patient', 'name', 'رقم', 'number', 
-      'تاريخ', 'date', 'طبيب', 'doctor', 'عيادة', 'clinic'
-    ];
-    
-    // 1. إزالة الأحرف الخاصة والأرقام غير المرغوب فيها
-    let cleaned = text.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, '');
-    
-    // 2. إزالة الأسطر الفارغة والمسافات الزائدة
-    cleaned = cleaned.split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-      .join(' ');
-    
-    // 3. إزالة المسافات الزائدة
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    
-    // 4. إزالة الكلمات الحساسة
-    sensitiveWords.forEach(word => {
-      const regex = new RegExp(`\\b${word}\\b`, 'gi');
-      cleaned = cleaned.replace(regex, '');
-    });
-    
-    // 5. إزالة أي كلمات قد تكون أسماء (اختياري - حسب الحاجة)
-    // هذه خطوة إضافية قد تحتاج إلى ضبط حسب السياق
-    cleaned = cleaned.split(' ')
-      .filter(word => word.length > 3) // تجاهل الكلمات القصيرة التي قد تكون أسماء
-      .join(' ');
-    
-    return cleaned.trim();
+      const response = await fetch(
+        'https://medicine-box-ocr-service-655189461698.us-central1.run.app/ocr',
+        {
+          method: 'POST',
+          
+          headers: {
+            'X-API-Key': API_KEY,
+            'accept': 'application/json',
+          },
+          body: formData
+        }
+      );
+  
+      if (!response.ok) {
+        return { success: false, error: `API error: ${response.status}` };
+      }
+  
+      const data = await response.json();
+      return { success: true, text: data.text };
+      
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown API error' 
+      };
+    }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+  const cleanOCRText = (text: string): string => {
+    // قائمة بالكلمات الشائعة في الوصفات الطبية التي ليست أسماء أدوية
+    const commonWords = [
+      'اسم', 'الاسم', 'مريض', 'patient', 'name', 'رقم', 'number', 
+      'تاريخ', 'date', 'طبيب', 'doctor', 'عيادة', 'clinic',
+      'جرعة', 'dose', 'الجرعة', 'الاستخدام', 'usage', 'تعليمات',
+      'instructions', 'حبة', 'كبسولة', 'tablet', 'capsule', 'شراب',
+      'syrup', 'حقنة', 'injection', 'مدة', 'duration', 'الصيدلية',
+      'pharmacy', 'التركيب', 'composition', 'المواد', 'ingredients'
+    ];
+  
+    // 1. إزالة الأحرف الخاصة والأرقام
+    let cleaned = text.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, '');
+  
+    // 2. تحويل النص إلى سطور وإزالة الأسطر الفارغة
+    const lines = cleaned.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+  
+    // 3. البحث عن السطر الذي يحتمل أن يكون اسم الدواء
+    // عادةً يكون اسم الدواء في السطر الأول أو الثاني
+    let medicineName = '';
+    for (let i = 0; i < Math.min(lines.length, 3); i++) {
+      const line = lines[i];
+      // تجاهل الأسطر التي تحتوي على كلمات شائعة
+      if (!commonWords.some(word => line.toLowerCase().includes(word.toLowerCase()))) {
+        medicineName = line;
+        break;
+      }
+    }
+  
+    // 4. إذا لم نجد اسماً واضحاً، نأخذ أول سطر طويل نسبياً
+    if (!medicineName && lines.length > 0) {
+      medicineName = lines.reduce((longest, line) => 
+        line.length > longest.length ? line : longest, lines[0]);
+    }
+  
+    // 5. إزالة الكلمات القصيرة التي قد تكون أسماء
+    medicineName = medicineName.split(' ')
+      .filter(word => word.length > 3) // تجاهل الكلمات القصيرة
+      .join(' ');
+  
+    return medicineName.trim();
+  };
+
+
   // البحث عن أفضل تطابق للأدوية
   const findBestMedicineMatch = (text: string) => {
     if (!medicines.length) return;
@@ -249,27 +322,20 @@ function Home() {
 
   useEffect(() => {
     const fetchUserLocation = async () => {
-      const token = localStorage.getItem('token'); // Check auth state
-      
-  
-      // Case 1: No token (user logged out) → Clear location data
-      if (!token) {
-        localStorage.removeItem('userLocation');
-        localStorage.removeItem('askedForLocation'); // Reset permission flag
-        return;
-      }
       const savedLocation = localStorage.getItem('userLocation');
       const hasAsked = localStorage.getItem('askedForLocation'); // Check if we've asked before
-      // Case 2: Token exists + never asked before → Ask for location
-      if (!hasAsked) {
-        askForLocation();
+      
+      // Case 1: Already asked → Use saved location (or skip if no saved location)
+      if (hasAsked) {
+        if (savedLocation) {
+          const location = JSON.parse(savedLocation);
+          setUserLocation(location);
+        }
+        return;
       }
-      // Case 3: Token exists + already asked → Use saved location (or force refresh if needed)
-      else if (savedLocation) {
-        const location = JSON.parse(savedLocation);
-        setUserLocation(location);
-        // Optional: Add a button to "Refresh Location" if needed
-      }
+      
+      // Case 2: Never asked → Ask for location (regardless of token)
+      askForLocation();
     };
   
     const askForLocation = () => {
@@ -593,14 +659,10 @@ function Home() {
     }
   };
 
-  const filteredMedicines = medicines.filter((medicine) =>
-    medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    medicine.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+ 
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentMedicines = filteredMedicines.slice(indexOfFirstItem, indexOfLastItem);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
@@ -611,10 +673,85 @@ function Home() {
   const closeModal = () => {
     setSelectedMedicine(null);
   };
+  const filterOptions = [
+    { id: 'blood', name: 'Blood Products', icon: <FaHeartbeat /> },
+    { id: 'dental', name: 'Dental and Oral Agents', icon: <FaAllergies /> }, // Using allergies icon as placeholder
+    { id: 'antibiotics', name: 'Antibiotics', icon: <FaFlask /> }
+  ];
+  
+  // Modify your filteredMedicines calculation to include the filters
+  const filteredMedicines = medicines.filter((medicine) => {
+    const matchesSearch = medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      medicine.category.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // If no filters selected, return all matches
+    if (selectedFilters.length === 0) return matchesSearch;
+    
+    // Check if medicine matches any of the selected filters
+    const matchesFilter = selectedFilters.some(filter => {
+      switch(filter) {
+        case 'blood':
+          return medicine.category.toLowerCase().includes('blood') || 
+                 medicine.name.toLowerCase().includes('blood');
+        case 'dental':
+          return medicine.category.toLowerCase().includes('dental') || 
+                 medicine.name.toLowerCase().includes('dental') ||
+                 medicine.category.toLowerCase().includes('oral') || 
+                 medicine.name.toLowerCase().includes('oral');
+        case 'antibiotics':
+          return medicine.category.toLowerCase().includes('antibiotic') || 
+                 medicine.name.toLowerCase().includes('antibiotic');
+        default:
+          return false;
+      }
+    });
+    
+    return matchesSearch && matchesFilter;
+  });
+  
+  // Add sorting logic before slicing for pagination
+  // Update your sorting logic to include price sorting
+const sortedMedicines = [...filteredMedicines].sort((a, b) => {
+  if (sortBy === 'near') {
+    if (a.distance === undefined) return 1;
+    if (b.distance === undefined) return -1;
+    return a.distance - b.distance;
+  }
+  if (sortBy === 'price-low') {
+    const priceA = parseFloat(a.price) || 0;
+    const priceB = parseFloat(b.price) || 0;
+    return priceA - priceB;
+  }
+  if (sortBy === 'price-high') {
+    const priceA = parseFloat(a.price) || 0;
+    const priceB = parseFloat(b.price) || 0;
+    return priceB - priceA;
+  }
+  return 0;
+});
+  
+  // Update your currentMedicines to use sortedMedicines
+  const currentMedicines = sortedMedicines.slice(indexOfFirstItem, indexOfLastItem);
+  
+  // Add these functions to handle filter and sort changes
+  const toggleFilter = (filterId: string) => {
+    setSelectedFilters(prev => 
+      prev.includes(filterId) 
+        ? prev.filter(id => id !== filterId) 
+        : [...prev, filterId]
+    );
+    setCurrentPage(1); // Reset to first page when filters change
+  };
+  
+  const handleSortChange = (sortOption: string) => {
+    setSortBy(sortOption);
+    setCurrentPage(1); // Reset to first page when sort changes
+  };
+  // Update your sorting logic to include price sorting
+
 
   return (
     <div className="relative min-h-screen flex flex-col text-white overflow-hidden bg-white">
-      {/* زر تحديد الموقع */}
       <motion.button
         onClick={toggleMap}
         className="fixed top-25 right-4 sm:right-6 z-40 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow-xl transition-all flex items-center gap-2 group border-2 border-indigo-400/30"
@@ -672,79 +809,85 @@ function Home() {
         </div>
       </motion.div>
   
-      {/* شريط البحث */}
-      <div className="relative z-20 mt-5 px-4 sm:px-6 lg:px-8">
-    <div className="max-w-4xl mx-auto">
-      <motion.div
-        className="bg-white p-4 rounded-xl shadow-xl border border-gray-200"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-grow">
-            <input
-              type="text"
-              placeholder="Search for medicines, vitamins, or health products..."
-              value={isListening ? interimResult : searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full p-3 sm:p-4 pr-16 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 border border-gray-200 placeholder-gray-400"
-            />
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-            <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`p-2 rounded-full ${
-                      isProcessingImage 
-                        ? 'bg-indigo-100 text-indigo-600 animate-pulse' 
-                        : 'bg-gray-100 text-indigo-600 hover:bg-gray-200'
-                    }`}
-                    title="Search by image"
-                    disabled={isProcessingImage}
-                  >
-                    {isProcessingImage ? <FaImage /> : <FaCamera />}
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                    capture="environment"
-                  />
-              <button 
-                onClick={toggleVoiceSearch}
-                className={`p-2 rounded-full ${
-                  isListening 
-                    ? 'bg-red-100 text-red-600 animate-pulse' 
-                    : 'bg-gray-100 text-indigo-600 hover:bg-gray-200'
-                }`}
-                title="Voice search"
-              >
-                <FaMicrophone />
-              </button>
-              <FaSearch className="text-indigo-600" />
-            </div>
-            {isListening && (
-              <div className="absolute left-4 top-4 text-xs text-indigo-600">
-                Listening...
-              </div>
-            )}
-          </div>
-          <button 
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-6 py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
-            onClick={() => {
-              setIsLoading(true);
-              setTimeout(() => setIsLoading(false), 500);
+   {/* شريط البحث */}
+<div className="relative z-20 mt-5 px-4 w-full">
+  <div className="max-w-4xl mx-auto">
+    <motion.div
+      className="bg-white p-3 sm:p-4 rounded-xl shadow-xl border border-gray-200"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-grow">
+          <input
+            type="text"
+            placeholder="Search for medicines, vitamins,....."
+            value={isListening ? interimResult : searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
             }}
-          >
-            <FaSearch />
-            <span className="hidden sm:inline">Search</span>
-          </button>
-          
+            className="w-full p-3 pr-16 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 border border-gray-200 placeholder-gray-400 text-sm sm:text-base"
+          />
+          <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-1 sm:gap-2">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className={`p-1 sm:p-2 rounded-full ${
+                isProcessingImage 
+                  ? 'bg-indigo-100 text-indigo-600 animate-pulse' 
+                  : 'bg-gray-100 text-indigo-600 hover:bg-gray-200'
+              }`}
+              title="Search by image"
+              disabled={isProcessingImage}
+            >
+              {isProcessingImage ? <FaImage size={16} /> : <FaCamera size={16} />}
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              accept="image/*"
+              className="hidden"
+              capture="environment"
+            />
+            <button 
+              onClick={toggleVoiceSearch}
+              className={`p-1 sm:p-2 rounded-full ${
+                isListening 
+                  ? 'bg-red-100 text-red-600 animate-pulse' 
+                  : 'bg-gray-100 text-indigo-600 hover:bg-gray-200'
+              }`}
+              title="Voice search"
+            >
+              <FaMicrophone size={16} />
+            </button>
+            <FaSearch className="text-indigo-600 hidden sm:block" size={16} />
+          </div>
+          {isListening && (
+            <div className="absolute left-3 sm:left-4 top-3 text-xs text-indigo-600">
+              Listening...
+            </div>
+          )}
         </div>
+        <button 
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 sm:py-3 rounded-lg transition-colors flex items-center justify-center gap-2 min-w-[100px]"
+          onClick={() => {
+            setIsLoading(true);
+            setTimeout(() => setIsLoading(false), 500);
+          }}
+        >
+          {isLoading ? (
+            <FaSpinner className="animate-spin" />
+          ) : (
+            <>
+              <FaSearch />
+              <span className="hidden sm:inline">Search</span>
+            </>
+          )}
+        </button>
+      </div>
+   
 
      {/* معاينة الصورة المختارة */}
             {imagePreview && (
@@ -775,7 +918,87 @@ function Home() {
           </motion.div>
         </div>
       </div>
+  {/* Filter and Sort Controls */}
+<motion.div 
+  className="max-w-4xl mx-auto mt-4 mb-6"
+  initial={{ opacity: 0, y: 10 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3 }}
+>
+  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    {/* Filter Buttons */}
+    <div className="flex flex-wrap gap-2">
+      {filterOptions.map((filter) => (
+        <button
+          key={filter.id}
+          onClick={() => toggleFilter(filter.id)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+            selectedFilters.includes(filter.id)
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          {filter.icon}
+          <span>{filter.name}</span>
+        </button>
+      ))}
+    </div>
+    
+    {/* Sort Dropdown */}
+    <div className="relative">
+      <select
+        value={sortBy}
+        onChange={(e) => handleSortChange(e.target.value)}
+        className="appearance-none bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 pl-4 pr-8 rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+      >
+        <option value="">Sort by</option>
+        <option value="near">Nearest First</option>
+        <option value="price-low">Price: Low to High</option>
+        <option value="price-high">Price: High to Low</option>
+      </select>
+      <FaChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs pointer-events-none" />
+    </div>
+  </div>
   
+  {/* Active Filters Display */}
+  {(selectedFilters.length > 0 || sortBy) && (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {selectedFilters.map(filterId => {
+        const filter = filterOptions.find(f => f.id === filterId);
+        return (
+          <div 
+            key={filterId}
+            className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs"
+          >
+            <span>{filter?.name}</span>
+            <button 
+              onClick={() => toggleFilter(filterId)}
+              className="text-indigo-600 hover:text-indigo-800"
+            >
+              <FaTimes size={10} />
+            </button>
+          </div>
+        );
+      })}
+      
+      {sortBy && (
+        <div className="flex items-center gap-1 bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-xs">
+          <span>
+            {sortBy === 'near' && 'Nearest First'}
+            {sortBy === 'price-low' && 'Price: Low to High'}
+            {sortBy === 'price-high' && 'Price: High to Low'}
+          </span>
+          <button 
+            onClick={() => handleSortChange('')}
+            className="text-gray-600 hover:text-gray-800"
+          >
+            <FaTimes size={10} />
+          </button>
+        </div>
+      )}
+    </div>
+  )}
+</motion.div>
       {/* قسم كروت الأدوية */}
       <div className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
         <div className="max-w-7xl mx-auto">
@@ -820,22 +1043,65 @@ function Home() {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {currentMedicines.map((medicine, index) => (
-                  <motion.div
-                    key={medicine.id}
-                    className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow cursor-pointer"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    whileHover={{ y: -5 }}
-                    onClick={() => openModal(medicine)}
-                  >
-                    <div className="bg-indigo-100 h-40 flex items-center justify-center relative">
-                      <FaPills className="text-6xl text-indigo-500 opacity-30" />
-                      <div className="absolute bottom-4 right-4 bg-indigo-800/90 text-white text-xs px-2 py-1 rounded-full shadow">
-                        {medicine.category}
-                      </div>
-                    </div>
+              {currentMedicines.map((medicine, index) => (
+  <motion.div
+    key={medicine.id}
+    className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow cursor-pointer"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3, delay: index * 0.05 }}
+    whileHover={{ 
+      y: -5,
+      boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.2)"
+    }}
+    onClick={() => openModal(medicine)}
+  >
+    {/* قسم أيقونة الدواء */}
+    <div className="bg-indigo-50 h-40 flex items-center justify-center relative overflow-hidden">
+      <motion.div
+        className="relative w-24 h-32"
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        transition={{ 
+          delay: index * 0.1 + 0.3,
+          type: "spring",
+          stiffness: 300,
+          damping: 10
+        }}
+        whileHover={{
+          rotate: [0, -2, 2, -2, 0], // اهتزاز خفيف
+          transition: { duration: 0.5 }
+        }}
+      >
+        {/* زجاجة الدواء */}
+        <FaPrescriptionBottleAlt className="absolute inset-0 text-6xl text-indigo-400/80" />
+        
+        {/* اسم الدواء داخل الزجاجة */}
+        <div className="absolute inset-0 flex items-center justify-center pt-8">
+          <motion.span 
+            className="text-indigo-800 font-bold text-sm text-center px-2 line-clamp-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: index * 0.1 + 0.5 }}
+          >
+            {medicine.name.split(' ').slice(0, 3).join(' ')}
+          </motion.span>
+        </div>
+        
+        {/* تأثير سائل داخل الزجاجة */}
+        <motion.div
+          className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-16 bg-indigo-100 rounded-t-full opacity-30"
+          initial={{ height: 0 }}
+          animate={{ height: 16 }}
+          transition={{ delay: index * 0.1 + 0.4 }}
+        />
+      </motion.div>
+      
+      {/* علامة التصنيف */}
+      <div className="absolute bottom-4 right-4 bg-indigo-800/90 text-white text-xs px-2 py-1 rounded-full shadow">
+        {medicine.category}
+      </div>
+    </div>
                     
                     <div className="p-5">
                       <div className="flex justify-between items-start mb-3">
@@ -1089,145 +1355,202 @@ function Home() {
         )}
       </AnimatePresence>
   
-      {/* نافذة تفاصيل الدواء */}
-      <AnimatePresence>
-        {selectedMedicine && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+    {/* نافذة تفاصيل الدواء - تصميم متجاوب وآمن */}
+    <AnimatePresence>
+  {selectedMedicine && (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* طبقة الخلفية */}
+      <motion.div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={closeModal}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      
+      {/* النافذة الرئيسية */}
+      <motion.div
+        className="relative bg-white rounded-xl md:rounded-2xl shadow-xl md:shadow-2xl w-full max-w-2xl md:max-w-4xl max-h-[95vh] overflow-hidden z-10 flex flex-col"
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        layout
+      >
+        {/* رأس النافذة */}
+        <div className="sticky top-0 p-3 sm:p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-indigo-600 to-indigo-500 text-white z-10">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <FaPills className="text-lg sm:text-xl" />
+            <h2 className="text-lg sm:text-xl font-bold line-clamp-1" title={selectedMedicine.name}>
+              {selectedMedicine.name}
+            </h2>
+          </div>
+          <button
+            onClick={closeModal}
+            className="text-white hover:text-gray-200 p-1 rounded-full hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+            aria-label="Close"
           >
-            <div 
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
-              onClick={closeModal}
-            />
+            <FaTimes className="text-base sm:text-lg" />
+          </button>
+        </div>
+        
+        {/* محتوى قابل للتمرير */}
+        <div className="overflow-y-auto scrollbar-hide flex-1 p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* الصف الأول من المعلومات */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {/* تفاصيل المنتج */}
+            <div className="bg-indigo-50 rounded-lg md:rounded-xl p-4 sm:p-5">
+              <h3 className="font-semibold text-indigo-800 mb-2 sm:mb-3 flex items-center text-base sm:text-lg">
+                <FaInfoCircle className="mr-2 flex-shrink-0" /> 
+                <span>Product Details</span>
+              </h3>
+              <div className="space-y-3 sm:space-y-4">
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Category</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.category || "Not specified"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Dosage Form</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.dosage || "As prescribed by physician"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Manufacturer</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.manufacturer || "Not specified"}
+                  </p>
+                </div>
+              </div>
+            </div>
             
-            <motion.div
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto z-10"
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            >
-              <div className="sticky top-0 p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-indigo-600 to-indigo-500 text-white z-10">
-                <div className="flex items-center space-x-3">
-                  <FaPills className="text-xl" />
-                  <h2 className="text-xl font-bold">{selectedMedicine.name}</h2>
-                </div>
-                <button
-                  onClick={closeModal}
-                  className="text-white hover:text-gray-200 p-1 rounded-full hover:bg-indigo-700 transition-colors"
-                >
-                  <FaTimes className="text-lg" />
-                </button>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-indigo-50 rounded-xl p-5">
-                    <h3 className="font-semibold text-indigo-800 mb-3 flex items-center text-lg">
-                      <FaInfoCircle className="mr-2" /> Product Details
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Category</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.category}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Dosage Form</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.dosage || "As prescribed by physician"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Manufacturer</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.manufacturer || "Not specified"}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-indigo-50 rounded-xl p-5">
-                    <h3 className="font-semibold text-indigo-800 mb-3 flex items-center text-lg">
-                      <FaDollarSign className="mr-2" /> Pricing & Availability
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Price</p>
-                        <p className="text-2xl font-bold text-indigo-700">${selectedMedicine.price}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">In Stock</p>
-                        <p className="text-2xl font-bold text-indigo-700">{selectedMedicine.quantity}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Expiry Date</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.exp_date}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Batch Number</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.batch || "N/A"}</p>
-                      </div>
-                    </div>
-                  </div>
+            {/* السعر والتوفر */}
+            <div className="bg-indigo-50 rounded-lg md:rounded-xl p-4 sm:p-5">
+              <h3 className="font-semibold text-indigo-800 mb-2 sm:mb-3 flex items-center text-base sm:text-lg">
+                <FaDollarSign className="mr-2 flex-shrink-0" /> 
+                <span>Pricing & Availability</span>
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Price</p>
+                  <p className="text-xl sm:text-2xl font-bold text-indigo-700">
 
-                  {/* قسم معلومات الصيدلية */}
-                  <div className="bg-indigo-50 rounded-xl p-5">
-                    <h3 className="font-semibold text-indigo-800 mb-3 flex items-center text-lg">
-                      <FaMapMarkerAlt className="mr-2" /> Pharmacy Information
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Pharmacy Name</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.pharmacy_location.pharmacy_name}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">City</p>
-                        <p className="text-gray-800 font-medium">{selectedMedicine.pharmacy_location.city}</p>
-                      </div>
-                      {selectedMedicine.distance !== undefined && (
-                        <div>
-                          <p className="text-sm text-gray-500 mb-1">Distance</p>
-                          <p className="text-gray-800 font-medium">{selectedMedicine.distance.toFixed(1)} km away</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    {selectedMedicine.price !== undefined && selectedMedicine.price !== null &&
+                    // @ts-ignore
+
+                     !isNaN(selectedMedicine.price) ?
+                      `$${parseFloat(selectedMedicine.price).toFixed(2)}` : 
+                      'N/A'}
+                  </p>
                 </div>
-                
-                <div className="bg-indigo-50 rounded-xl p-5">
-                  <h3 className="font-semibold text-indigo-800 mb-3 flex items-center text-lg">
-                    <FaFileAlt className="mr-2" /> Description & Usage
-                  </h3>
-                  <div className="prose max-w-none text-gray-800">
-                    {selectedMedicine.description ? (
-                      <p>{selectedMedicine.description}</p>
-                    ) : (
-                      <div className="space-y-3">
-                        <p>Comprehensive information available at your nearest pharmacy.</p>
-                        <p className="text-sm text-gray-600">Always consult with a healthcare professional before using this medication.</p>
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">In Stock</p>
+                  <p className={`text-xl sm:text-2xl font-bold ${
+                    selectedMedicine.quantity > 0 ? "text-indigo-700" : "text-red-600"
+                  }`}>
+                    {selectedMedicine.quantity > 0 ? selectedMedicine.quantity : "Out of stock"}
+                  </p>
                 </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <button className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white px-6 py-4 rounded-xl transition-all flex items-center justify-center space-x-3 shadow-md">
-                    <FaMapMarkerAlt />
-                    <span>Find Nearest Pharmacy</span>
-                  </button>
-                  <button 
-                    onClick={closeModal}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-4 rounded-xl transition-all flex items-center justify-center space-x-3"
-                  >
-                    <FaTimes />
-                    <span>Close Details</span>
-                  </button>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Expiry Date</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.exp_date || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Batch Number</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.batch || "N/A"}
+                  </p>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+
+            {/* معلومات الصيدلية */}
+            <div className="bg-indigo-50 rounded-lg md:rounded-xl p-4 sm:p-5 md:col-span-2">
+              <h3 className="font-semibold text-indigo-800 mb-2 sm:mb-3 flex items-center text-base sm:text-lg">
+                <FaMapMarkerAlt className="mr-2 flex-shrink-0" /> 
+                <span>Pharmacy Information</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Pharmacy Name</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.pharmacy_location?.pharmacy_name || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">City</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {selectedMedicine.pharmacy_location?.city || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-1">Distance</p>
+                  <p className="text-gray-800 font-medium text-sm sm:text-base">
+                    {typeof selectedMedicine.distance === 'number' ? 
+                     `${Number(selectedMedicine.distance).toFixed(1)} km away` : 
+                     'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* الوصف والاستخدام */}
+          <div className="bg-indigo-50 rounded-lg md:rounded-xl p-4 sm:p-5">
+            <h3 className="font-semibold text-indigo-800 mb-2 sm:mb-3 flex items-center text-base sm:text-lg">
+              <FaFileAlt className="mr-2 flex-shrink-0" /> 
+              <span>Description & Usage</span>
+            </h3>
+            <div className="text-sm sm:text-base text-gray-800">
+              {selectedMedicine.description ? (
+                <p className="whitespace-pre-line">{selectedMedicine.description}</p>
+              ) : (
+                <div className="space-y-2 sm:space-y-3">
+                  <p>Comprehensive information available at your nearest pharmacy.</p>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Always consult with a healthcare professional before using this medication.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* أزرار الإجراءات - ثابتة في الأسفل */}
+        <div className="sticky bottom-0 bg-white pt-3 pb-3 px-4 sm:px-6 border-t border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <button 
+              className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white px-4 py-3 sm:px-6 sm:py-3 rounded-lg md:rounded-xl transition-all flex items-center justify-center space-x-2 sm:space-x-3 shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              onClick={() => {
+                // إضافة وظيفة البحث عن أقرب صيدلية هنا
+              }}
+            >
+              <FaMapMarkerAlt className="flex-shrink-0 text-sm sm:text-base" />
+              <span className="text-sm sm:text-base">Find Nearest Pharmacy</span>
+            </button>
+            <button 
+              onClick={closeModal}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-3 sm:px-6 sm:py-3 rounded-lg md:rounded-xl transition-all flex items-center justify-center space-x-2 sm:space-x-3 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            >
+              <FaTimes className="flex-shrink-0 text-sm sm:text-base" />
+              <span className="text-sm sm:text-base">Close Details</span>
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
     </div>
   );
 }

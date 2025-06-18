@@ -1,19 +1,58 @@
 @import "tailwindcss";
 
+/* Fun stylish scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
 
+::-webkit-scrollbar-track {
+  background: #f3f4f6; /* رمادي فاتح (مائل للبياض) */
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4f46e5; /* Indigo 600 نفسه */
+  border-radius: 8px;
+  border: 2px solid #f3f4f6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4338ca; /* Indigo 700 (أغمق قليلًا عند hover) */
+}
+
+/* Optional: Add some animation */
+::-webkit-scrollbar-thumb {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(79, 70, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
+}
+
+/* Your existing styles */
 .leaflet-container {
-    width: 300px; 
-    height: 200px; 
-    border-radius: 15px; 
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); 
-  }
-  
-  .map-container {
-    position: fixed;
-    top: 30px;
-    left: 20px; 
-    z-index: 1000; 
-  }
+  width: 300px; 
+  height: 200px; 
+  border-radius: 15px; 
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); 
+}
+
+.map-container {
+  position: fixed;
+  top: 30px;
+  left: 20px; 
+  z-index: 1000; 
+}
+
 .react-chatbot-kit-chat-bot-avatar-container,
 .react-chatbot-kit-user-chat-message-container {
   display: none;

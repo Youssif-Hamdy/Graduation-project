@@ -22,9 +22,19 @@ const App: React.FC = () => {
   const [nationalId, setNationalId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  // @ts-ignore
+
   const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
   const [isForgetPasswordModalOpen, setIsForgetPasswordModalOpen] = useState(false);
   const navigate = useNavigate();
+   useEffect(() => {
+      localStorage.removeItem('askedForLocation');
+      localStorage.removeItem('userLocation');
+      localStorage.removeItem('selectedPharmacyLocation');
+
+
+  
+    }, [navigate]);
 
   // Function to check if token is valid
   const isTokenValid = (token: string | null): boolean => {

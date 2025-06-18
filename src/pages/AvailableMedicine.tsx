@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FaPlus, FaTrash, FaPhone, FaArrowLeft, FaArrowRight, FaMapMarkerAlt, FaMap, FaSignInAlt, FaPills, FaFileAlt, FaUser } from "react-icons/fa";
+import { FaPlus, FaTrash, FaPhone, FaArrowLeft, FaArrowRight, FaMapMarkerAlt, FaMap, FaSignInAlt, FaPills, FaFileAlt, FaUser, FaPlay } from "react-icons/fa";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
@@ -16,7 +16,15 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-
+// إنشاء أيقونة مخصصة للدبوس الأحمر
+const redIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 interface Pharmacy {
   id: number;
   name: string;
@@ -41,19 +49,23 @@ const AvailableMedicine: React.FC = () => {
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isMapOpen, setIsMapOpen] = useState<boolean>(false);
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [newPharmacy, setNewPharmacy] = useState({
     name: "",
     city: "",
-    latitude: "0", // بدلاً من ".000"
+    latitude: "0", 
     longitude: "0",
     license_number: "",
     password: "",
     confirm_password: "",
-    address: "", // ← أضف دي
+    address: "",
 
   });
   const [currentPage, setCurrentPage] = useState<number>(1);
+  // @ts-ignore
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const itemsPerPage: number = 10;
@@ -422,19 +434,32 @@ const AvailableMedicine: React.FC = () => {
         </motion.p>
         
         <div className="flex gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
+        <motion.button
+            whileHover={{ scale: 1.05, boxShadow: "0 5px 15px rgba(79, 70, 229, 0.3)" }}
             whileTap={{ scale: 0.95 }}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 shadow-md"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 shadow-md flex items-center gap-2"
           >
-            Learn More
+            <motion.span 
+              animate={{ x: [0, 5, 0] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+            >
+              <FaArrowRight />
+            </motion.span>
+          
           </motion.button>
           <motion.button
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.05, boxShadow: "0 5px 15px rgba(255, 255, 255, 0.3)" }}
             whileTap={{ scale: 0.95 }}
-            className="px-6 py-3 bg-white text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50 transition-all duration-300"
+            onClick={() => setIsDemoModalOpen(true)}
+            className="px-6 py-3 bg-white text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50 transition-all duration-300 flex items-center gap-2"
           >
-            Watch Demo
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ repeat: Infinity, duration: 3 }}
+            >
+              <FaPlay className="text-indigo-600" />
+            </motion.div>
+            <span>Watch Demo</span>
           </motion.button>
         </div>
       </div>
@@ -527,7 +552,32 @@ const AvailableMedicine: React.FC = () => {
   </div>
 
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-    {currentPharmacies.map((pharmacy, index) => (
+  {pharmacies.length === 0 ? (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="col-span-full text-center py-12"
+      >
+        <img 
+          src="https://img.freepik.com/free-vector/no-data-concept-illustration_114360-616.jpg" 
+          alt="No pharmacies"
+          className="w-64 mx-auto mb-4"
+        />
+        <h3 className="text-xl font-medium text-gray-700 mb-2">No Pharmacies Found</h3>
+        <p className="text-gray-500 mb-4">Add new pharmacies to the system</p>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsModalOpen(true)}
+          className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition duration-300"
+        >
+          Add First Pharmacy
+        </motion.button>
+      </motion.div>
+    ) : (
+    
+    currentPharmacies.map((pharmacy, index) => (
       <motion.div
         key={pharmacy.id}
         initial={{ opacity: 0, y: 20 }}
@@ -599,7 +649,8 @@ const AvailableMedicine: React.FC = () => {
           </div>
         </div>
       </motion.div>
-    ))}
+       ))
+    )}
   </div>
 
   {/* Pagination Controls */}
@@ -646,14 +697,14 @@ const AvailableMedicine: React.FC = () => {
     </div>
   </motion.div>
 </motion.section>
-      {/* Modal for Adding New Pharmacy */}
-      {isModalOpen && (
-  <div className="fixed inset-0 bg-opacity-50 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 z-50 overflow-y-auto">
-    <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg sm:shadow-2xl w-full max-w-md mx-auto my-4 sm:my-8 border border-indigo-100">
+    {/* Modal for Adding New Pharmacy */}
+{isModalOpen && (
+  <div className="fixed inset-0  bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-xs sm:max-w-md mx-auto border border-indigo-100">
       {/* Modal Header */}
       <div className="mb-4 sm:mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-indigo-900 text-center">Add New Pharmacy</h2>
-        <div className="w-12 sm:w-16 h-1 bg-indigo-200 mx-auto mt-2 rounded-full"></div>
+        <h2 className="text-lg sm:text-2xl font-bold text-indigo-900 text-center">Add New Pharmacy</h2>
+        <div className="w-10 sm:w-16 h-1 bg-indigo-200 mx-auto mt-2 rounded-full"></div>
       </div>
 
       <form onSubmit={(e) => {
@@ -661,15 +712,15 @@ const AvailableMedicine: React.FC = () => {
         handleAddPharmacy();
       }}>
         {/* Grid Layout for Form Fields */}
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          {/* Name Field - Full Width */}
+        <div className="grid grid-cols-1 gap-2 sm:gap-4 mb-3 sm:mb-6">
+          {/* Name Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pharmacy Name*</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Pharmacy Name*</label>
             <input
               type="text"
               value={newPharmacy.name}
               onChange={(e) => setNewPharmacy({ ...newPharmacy, name: e.target.value })}
-              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full p-2 sm:p-3 text-xs sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="Pharmacy name"
               required
             />
@@ -677,12 +728,12 @@ const AvailableMedicine: React.FC = () => {
 
           {/* City Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">City*</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">City*</label>
             <input
               type="text"
               value={newPharmacy.city}
               onChange={(e) => setNewPharmacy({ ...newPharmacy, city: e.target.value })}
-              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full p-2 sm:p-3 text-xs sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="City"
               required
             />
@@ -690,12 +741,12 @@ const AvailableMedicine: React.FC = () => {
 
           {/* License Number Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">License Number*</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">License Number*</label>
             <input
               type="text"
               value={newPharmacy.license_number}
               onChange={(e) => setNewPharmacy({ ...newPharmacy, license_number: e.target.value })}
-              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full p-2 sm:p-3 text-xs sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="License number"
               required
             />
@@ -703,20 +754,20 @@ const AvailableMedicine: React.FC = () => {
         </div>
 
         {/* Location Section */}
-        <div className="mb-4 sm:mb-6 bg-indigo-50 p-3 sm:p-4 rounded-lg">
+        <div className="mb-3 sm:mb-6 bg-indigo-50 p-2 sm:p-4 rounded-lg">
           <h3 className="text-xs sm:text-sm font-semibold text-indigo-800 mb-2 sm:mb-3 flex items-center">
             <FaMapMarkerAlt className="mr-1 sm:mr-2" /> Location Information
           </h3>
 
           {/* Address Field */}
-          <div className="mb-3 sm:mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address*</label>
+          <div className="mb-2 sm:mb-4">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Address*</label>
             <div className="flex">
               <input
                 type="text"
                 value={newPharmacy.address || ''}
                 onChange={(e) => setNewPharmacy({ ...newPharmacy, address: e.target.value })}
-                className="flex-1 p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="flex-1 p-2 sm:p-3 text-xs sm:text-base border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="Full address"
                 required
               />
@@ -726,7 +777,7 @@ const AvailableMedicine: React.FC = () => {
                 className="bg-indigo-600 text-white p-2 sm:p-3 rounded-r-lg hover:bg-indigo-700 transition flex items-center justify-center"
                 title="Pick from map"
               >
-                <FaMap className="text-sm sm:text-base" />
+                <FaMap className="text-xs sm:text-base" />
               </button>
             </div>
           </div>
@@ -755,25 +806,25 @@ const AvailableMedicine: React.FC = () => {
         </div>
 
         {/* Password Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-3 sm:mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password*</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Password*</label>
             <input
               type="password"
               value={newPharmacy.password}
               onChange={(e) => setNewPharmacy({ ...newPharmacy, password: e.target.value })}
-              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full p-2 sm:p-3 text-xs sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="••••••••"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password*</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Confirm Password*</label>
             <input
               type="password"
               value={newPharmacy.confirm_password}
               onChange={(e) => setNewPharmacy({ ...newPharmacy, confirm_password: e.target.value })}
-              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full p-2 sm:p-3 text-xs sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="••••••••"
               required
             />
@@ -785,13 +836,13 @@ const AvailableMedicine: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsModalOpen(false)}
-            className="px-4 sm:px-6 py-2 sm:py-2.5 text-sm sm:text-base bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+            className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 sm:px-6 py-2 sm:py-2.5 text-sm sm:text-base bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm"
+            className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm"
           >
             Add Pharmacy
           </button>
@@ -832,16 +883,19 @@ const AvailableMedicine: React.FC = () => {
                   <LocationMarker setSelectedLocation={setSelectedLocation} />
                   
                   {selectedLocation && (
-                    <Marker position={[selectedLocation.lat, selectedLocation.lng]}>
-                      <Popup>
-                        <div className="text-center">
-                          <strong>Selected Location</strong><br />
-                          Lat: {selectedLocation.lat.toFixed(6)}<br />
-                          Lng: {selectedLocation.lng.toFixed(6)}
-                        </div>
-                      </Popup>
-                    </Marker>
-                  )}
+  <Marker 
+    position={[selectedLocation.lat, selectedLocation.lng]}
+    icon={redIcon} // هنا نستخدم الأيقونة الحمراء
+  >
+    <Popup>
+      <div className="text-center">
+        <strong>Selected Location</strong><br />
+        Lat: {selectedLocation.lat.toFixed(6)}<br />
+        Lng: {selectedLocation.lng.toFixed(6)}
+      </div>
+    </Popup>
+  </Marker>
+)}
                 </MapContainer>
               )}
               
@@ -904,7 +958,183 @@ const AvailableMedicine: React.FC = () => {
           </div>
         </div>
       )}
-  {/* Map Modal */}
+  {/* Demo Modal */}
+{isDemoModalOpen && (
+  <div className="fixed inset-0 bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <motion.div 
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className="bg-white p-3 sm:p-6 rounded-xl shadow-2xl w-full max-w-[90%] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto relative"
+      >
+      <button 
+        onClick={() => setIsDemoModalOpen(false)}
+        className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl"
+      >
+        &times;
+      </button>
+      
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-bold text-indigo-900 mb-2">
+          <FaPills className="inline mr-2 text-indigo-600" />
+          Pharmacy Management Demo
+        </h3>
+        <p className="text-gray-600">See how our platform can help you manage pharmacies efficiently</p>
+      </div>
+      
+      <div className="bg-gray-100 rounded-lg p-2 sm:p-4 mb-4 h-40 sm:h-64 flex items-center justify-center relative overflow-hidden">
+      {/* Pharmacy Building */}
+  <motion.div 
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5 }}
+    className="absolute bottom-0 left-1/2 transform -translate-x-1/2"
+  >
+    <div className="relative">
+      {/* Pharmacy Sign */}
+      <motion.div 
+        animate={{ rotate: [0, 5, -5, 0] }}
+        transition={{ repeat: Infinity, duration: 8 }}
+        className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-3 py-1 rounded-md text-sm font-bold"
+      >
+        <div className="flex items-center">
+          <FaPlus className="mr-1" />
+          <span>PHARMACY</span>
+        </div>
+      </motion.div>
+      
+      {/* Building */}
+      <div className="w-32 h-20 bg-blue-600 rounded-t-lg relative">
+        {/* Windows */}
+        <div className="flex justify-around pt-2">
+          <div className="w-6 h-6 bg-yellow-300 rounded-sm"></div>
+          <div className="w-6 h-6 bg-yellow-300 rounded-sm"></div>
+          <div className="w-6 h-6 bg-yellow-300 rounded-sm"></div>
+        </div>
+        
+        {/* Door */}
+        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-8 h-12 bg-blue-700 rounded-t-md">
+          <div className="absolute top-1/2 left-2 w-1 h-1 bg-yellow-300 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+  
+  {/* Medicine Bottles */}
+  <motion.div
+    initial={{ x: -50, opacity: 0 }}
+    animate={{ x: 0, opacity: 1 }}
+    transition={{ delay: 0.5, duration: 0.5 }}
+    className="absolute left-10 bottom-0"
+  >
+    <div className="flex space-x-2">
+      {[1, 2, 3].map((item) => (
+        <motion.div
+          key={item}
+          animate={{ y: [0, -5, 0] }}
+          transition={{ repeat: Infinity, duration: 2 + item, delay: item * 0.3 }}
+          className="w-6 h-8 bg-green-500 rounded-t-full relative"
+        >
+          <div className="absolute top-1 w-5 h-1 bg-green-600 left-1/2 transform -translate-x-1/2"></div>
+          <div className="absolute bottom-0 w-full h-2 bg-green-700 rounded-b-sm"></div>
+        </motion.div>
+      ))}
+    </div>
+  </motion.div>
+  
+  {/* Pills Animation */}
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ delay: 1, duration: 0.5 }}
+    className="absolute top-10 left-1/2 transform -translate-x-1/2"
+  >
+    {[1, 2, 3, 4].map((item) => (
+      <motion.div
+        key={item}
+        animate={{
+          x: [0, 50, 0, -50, 0],
+          y: [0, 20, 40, 20, 0],
+          rotate: [0, 180, 360]
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 8 + item,
+          ease: "linear"
+        }}
+        className={`w-4 h-4 rounded-full absolute ${item % 2 === 0 ? 'bg-red-500' : 'bg-blue-500'}`}
+        style={{
+          left: `${item * 30}px`,
+          top: `${item * 5}px`
+        }}
+      ></motion.div>
+    ))}
+  </motion.div>
+  
+  {/* Medical Cross */}
+  <motion.div
+    initial={{ scale: 0 }}
+    animate={{ scale: 1, rotate: 360 }}
+    transition={{ delay: 1.5, duration: 1, type: "spring" }}
+    className="absolute top-1/2 right-10 text-red-500 text-4xl"
+  >
+    <FaPlus />
+  </motion.div>
+  
+  {/* Pulse Animation */}
+  <motion.div
+    animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0] }}
+    transition={{ repeat: Infinity, duration: 3 }}
+    className="absolute top-2 right-2 sm:top-4 sm:right-4 text-gray-500 hover:text-gray-700 text-xl sm:text-2xl"    >
+      
+    </motion.div>
+  
+ 
+</div>
+      
+<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <motion.div 
+          whileHover={{ y: -5 }}
+          className="bg-indigo-50 p-4 rounded-lg border border-indigo-100"
+        >
+          <div className="bg-indigo-100 w-12 h-12 rounded-full flex items-center justify-center mb-3 mx-auto">
+            <FaPlus className="text-indigo-600" />
+          </div>
+          <h4 className="font-semibold text-center mb-2">Add Pharmacies</h4>
+          <p className="text-sm text-gray-600 text-center">Easily add new pharmacies to your network</p>
+        </motion.div>
+        
+        <motion.div 
+          whileHover={{ y: -5 }}
+          className="bg-blue-50 p-4 rounded-lg border border-blue-100"
+        >
+          <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mb-3 mx-auto">
+            <FaMapMarkerAlt className="text-blue-600" />
+          </div>
+          <h4 className="font-semibold text-center mb-2">Location Tracking</h4>
+          <p className="text-sm text-gray-600 text-center">Pinpoint exact locations on interactive maps</p>
+        </motion.div>
+        
+        <motion.div 
+          whileHover={{ y: -5 }}
+          className="bg-green-50 p-4 rounded-lg border border-green-100"
+        >
+          <div className="bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mb-3 mx-auto">
+            <FaFileAlt className="text-green-600" />
+          </div>
+          <h4 className="font-semibold text-center mb-2">License Management</h4>
+          <p className="text-sm text-gray-600 text-center">Keep track of all pharmacy licenses</p>
+        </motion.div>
+      </div>
+      
+      <button
+        onClick={() => setIsDemoModalOpen(false)}
+        className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm"
+      >
+        Got it, thanks!
+      </button>
+    </motion.div>
+  </div>
+)}
  
     </div>
   );

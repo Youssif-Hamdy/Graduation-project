@@ -45,6 +45,8 @@ function About() {
   };
 
   const [showChatbot, setShowChatbot] = useState(false);
+  // @ts-ignore
+
   const [showMessage, setShowMessage] = useState(false);
 
   const pharmacyImage1 = 'https://images.unsplash.com/photo-1628771065518-0d82f1938462?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';

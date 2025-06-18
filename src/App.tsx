@@ -44,6 +44,7 @@ const App: React.FC = () => {
         path="/admin"
         element={
           <ProtectedRoute>
+           {/* @ts-ignore */}
             <RootLayout>
               <div>Admin Dashboard</div>
             </RootLayout>

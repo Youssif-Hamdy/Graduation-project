@@ -2,7 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { FaPlus, FaEdit, FaTrash, FaSignOutAlt, FaSearch, FaPills, FaTags, FaShieldAlt, FaShippingFast } from "react-icons/fa";
+// @ts-ignore
+
+import { FaPlus, FaEdit, FaTrash, FaSignOutAlt, FaSearch, FaPills, FaTags, FaShieldAlt, FaShippingFast, FaExchangeAlt, FaRetweet } from "react-icons/fa";
 import { useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -14,16 +16,27 @@ interface Medicine {
   price: string;
   quantity: number;
   exp_date: string;
+  can_be_sell: boolean;
+  quantity_to_sell: number;
+  price_sell: string;
 }
 
 const MedicinePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { pharmacyName } = location.state || { pharmacyName: "Unknown Pharmacy" };
+    // @ts-ignore
+const [pharmacyName, setPharmacyName] = useState(
+  location.state?.pharmacyName || localStorage.getItem('pharmacyName') || "Unknown Pharmacy"
+);
+
+useEffect(() => {
+  if (location.state?.pharmacyName) {
+    localStorage.setItem('pharmacyName', location.state.pharmacyName);
+  }
+}, [location.state]);
+  // @ts-ignore
+
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-
-  
-
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [newMedicine, setNewMedicine] = useState<Omit<Medicine, "id">>({
     name: "",
@@ -32,21 +45,29 @@ const MedicinePage: React.FC = () => {
     price: "",
     quantity: 0,
     exp_date: "",
+    can_be_sell: true,
+    quantity_to_sell: 0,
+    price_sell: "",
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
-
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(8);
 
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (!token) {
       toast.error("You need to login first.");
       navigate("/pharmacy-login");
-      return; // Ensure the code stops here if no token is found
+      return;
     } else {
       fetchMedicines();
     }
   }, [navigate]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [medicines]);
 
   const refreshToken = async (): Promise<void> => {
     const refreshToken = localStorage.getItem("refreshToken");
@@ -79,7 +100,7 @@ const MedicinePage: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       refreshToken();
-    }, 10 * 60 * 1000); // 10 minutes
+    }, 10 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -140,10 +161,109 @@ const MedicinePage: React.FC = () => {
     fetchMedicines();
   }, []);
 
+  const validateMedicine = (medicine: Omit<Medicine, "id"> | Medicine): boolean => {
+    if (!medicine.name || !medicine.category || !medicine.price || !medicine.exp_date) {
+      toast.error("Please fill all required fields");
+      return false;
+    }
+    
+    if (parseFloat(medicine.price) <= 0) {
+      toast.error("Price must be greater than 0");
+      return false;
+    }
+    
+    if (medicine.quantity <= 0) {
+      toast.error("Quantity must be greater than 0");
+      return false;
+    }
+    
+    if (medicine.can_be_sell && (medicine.quantity_to_sell <= 0 || parseFloat(medicine.price_sell || "0") <= 0)) {
+      toast.error("If medicine can be sell, selling quantity and price must be greater than 0");
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleToggleCanBeSell = async (id: number, newValue: boolean): Promise<void> => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      toast.error("You need to log in first.");
+      return;
+    }
+  
+    try {
+      const medicineToUpdate = medicines.find(med => med.id === id);
+      if (!medicineToUpdate) {
+        toast.error("Medicine not found");
+        return;
+      }
+  
+      const payload = {
+        ...medicineToUpdate,
+        can_be_sell: newValue,
+        quantity_to_sell: newValue ? (medicineToUpdate.quantity_to_sell || 1) : 0,
+        price_sell: newValue ? (medicineToUpdate.price_sell || medicineToUpdate.price) : "0",
+        price: parseFloat(medicineToUpdate.price),
+        quantity: parseInt(medicineToUpdate.quantity.toString(), 10),
+      };
+  // @ts-ignore
+
+      delete payload.id;
+  
+      const response = await fetch(`https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API Error Details:", errorData);
+        
+        // عرض رسالة الخطأ بشكل أكثر وضوحاً
+        if (errorData.quantity_to_sell) {
+          throw new Error(errorData.quantity_to_sell[0]);
+        }
+        throw new Error(errorData.message || "Failed to update medicine");
+      }
+  
+      const data: Medicine = await response.json();
+      
+      // تحديث الحالة المحلية
+      setMedicines(medicines.map(med => 
+        med.id === id ? { 
+          ...med, 
+          can_be_sell: data.can_be_sell,
+          quantity_to_sell: data.quantity_to_sell,
+          price_sell: data.price_sell
+        } : med
+      ));
+      
+      toast.success(`Medicine marked as ${newValue ? "can be sold" : "cannot be sold"}`);
+    } catch (error) {
+      console.error("Error updating medicine:", error);
+      // @ts-ignore
+
+      toast.error(error.message || "Failed to update medicine. Please try again.");
+      
+      setMedicines(medicines.map(med => 
+        med.id === id ? { ...med, can_be_sell: !newValue } : med
+      ));
+    }
+  };
+
   const handleAddMedicine = async (): Promise<void> => {
     const token = localStorage.getItem("accessToken");
     if (!token) {
       toast.error("You need to log in first.");
+      return;
+    }
+
+    if (!validateMedicine(newMedicine)) {
       return;
     }
 
@@ -154,6 +274,9 @@ const MedicinePage: React.FC = () => {
       price: parseFloat(newMedicine.price),
       quantity: parseInt(newMedicine.quantity.toString(), 10),
       exp_date: newMedicine.exp_date,
+      can_be_sell: newMedicine.can_be_sell,
+      quantity_to_sell: parseInt(newMedicine.quantity_to_sell.toString(), 10),
+      price_sell: parseFloat(newMedicine.price_sell || "0"),
     };
 
     try {
@@ -182,6 +305,9 @@ const MedicinePage: React.FC = () => {
         price: "",
         quantity: 0,
         exp_date: "",
+        can_be_sell: true,
+        quantity_to_sell: 0,
+        price_sell: "",
       });
       setIsModalOpen(false);
     } catch (error) {
@@ -196,6 +322,19 @@ const MedicinePage: React.FC = () => {
       toast.error("You need to log in first.");
       return;
     }
+
+    if (!validateMedicine(updatedMedicine)) {
+      return;
+    }
+
+    const payload = {
+      ...updatedMedicine,
+      price: parseFloat(updatedMedicine.price),
+      quantity: parseInt(updatedMedicine.quantity.toString(), 10),
+      quantity_to_sell: parseInt(updatedMedicine.quantity_to_sell.toString(), 10),
+      price_sell: parseFloat(updatedMedicine.price_sell || "0"),
+    };
+
     try {
       const response = await fetch(`https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`, {
         method: "PUT",
@@ -203,7 +342,7 @@ const MedicinePage: React.FC = () => {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(updatedMedicine),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         throw new Error("Failed to update medicine");
@@ -267,7 +406,7 @@ const MedicinePage: React.FC = () => {
   const performLogout = async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
-      const accessToken = localStorage.getItem('accessToken'); // استخدام accessToken بدلاً من token
+      const accessToken = localStorage.getItem('accessToken');
       console.log('Refresh Token:', refreshToken);
       console.log('Access Token:', accessToken);
   
@@ -279,7 +418,7 @@ const MedicinePage: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`, // استخدام accessToken هنا
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ refresh: refreshToken }),
       });
@@ -291,28 +430,26 @@ const MedicinePage: React.FC = () => {
         throw new Error(data.message || 'Failed to log out');
       }
   
-      // حذف جميع الـ tokens من localStorage
-      localStorage.removeItem('accessToken'); // إذا كان token موجودًا
-  
-      // تحديث حالة تسجيل الدخول
+      localStorage.removeItem('accessToken');
       setIsLoggedIn(false);
       toast.success('Logged out successfully!');
-  
-      // إعادة توجيه المستخدم إلى صفحة تسجيل الدخول
       navigate('/pharmacy-login');
     } catch (err: any) {
       console.error('Logout error:', err);
       toast.error(err.message || 'An error occurred during logout. Please try again.');
-  
-      // حذف الـ tokens حتى إذا فشل الطلب
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-  
-      // إعادة توجيه المستخدم إلى صفحة تسجيل الدخول
       navigate('/pharmacy-login');
     }
   };
 
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = medicines.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(medicines.length / itemsPerPage);
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   return (
     <div className="p-4 sm:p-8 bg-gray-50 min-h-screen">
@@ -334,17 +471,19 @@ const MedicinePage: React.FC = () => {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setIsModalOpen(true)}
-              className="bg-indigo-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center justify-center shadow-md"
+              className="bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center justify-center shadow-md flex-1 sm:flex-none"
             >
-              <FaPlus className="mr-2" /> Add Medicine
+              <FaPlus className="mr-2 text-sm" /> 
+              <span className="text-sm sm:text-base">Add Medicine</span>
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={performLogout}
-              className="bg-red-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-red-700 transition-all duration-300 flex items-center justify-center shadow-md"
+              className="bg-red-500 text-white p-2.5 rounded-lg hover:bg-red-600 transition-all duration-300 flex items-center justify-center shadow-md"
+              aria-label="Logout"
             >
-              <FaSignOutAlt className="mr-2" /> Logout
+              <FaSignOutAlt className="text-lg" />
             </motion.button>
           </div>
         </motion.div>
@@ -409,223 +548,361 @@ const MedicinePage: React.FC = () => {
               </button>
             </motion.div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {medicines.map((medicine, index) => (
-                <motion.div
-                  key={medicine.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 * index, duration: 0.3 }}
-                  whileHover={{ y: -5 }}
-                  className="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100"
-                >
-                  <div className="relative h-48 bg-gray-100 overflow-hidden">
-                    <img
-                      src={medicine.imageUrl || "https://www.creativefabrica.com/wp-content/uploads/2020/07/17/Medicine-Logo-Graphics-4647232-1-1-580x386.jpg"}
-                      alt={medicine.name}
-                      className="w-full h-full object-cover"
-                    />
-                    {medicine.exp_date && new Date(medicine.exp_date) < new Date() && (
-                      <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                        Expired
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="p-5">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg font-semibold text-gray-800">{medicine.name}</h3>
-                      <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full">
-                        {medicine.category}
-                      </span>
-                    </div>
-                    
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{medicine.description}</p>
-                    
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                      <div>
-                        <p className="text-xs text-gray-500">Price</p>
-                        <p className="font-medium">${medicine.price}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Quantity</p>
-                        <p className={`font-medium ${medicine.quantity < 10 ? 'text-red-500' : 'text-green-500'}`}>
-                          {medicine.quantity} {medicine.quantity < 10 && '(Low)'}
-                        </p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-xs text-gray-500">Expiry Date</p>
-                        <p className={`font-medium ${new Date(medicine.exp_date) < new Date() ? 'text-red-500' : 'text-gray-700'}`}>
-                          {new Date(medicine.exp_date).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between gap-2">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => openEditModal(medicine)}
-                        className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition-all duration-300 flex items-center justify-center text-sm"
-                      >
-                        <FaEdit className="mr-1" /> Edit
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDeleteMedicine(medicine.id)}
-                        className="flex-1 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 transition-all duration-300 flex items-center justify-center text-sm"
-                      >
-                        <FaTrash className="mr-1" /> Delete
-                      </motion.button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+  {currentItems.map((medicine, index) => (
+    <motion.div
+      key={medicine.id}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 * index, duration: 0.3 }}
+      className="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col"
+      style={{ minHeight: '420px' }} // ارتفاع ثابت للكارد
+    >
+      {/* الصورة */}
+      <div className="relative h-40 bg-gray-100 overflow-hidden"> {/* ارتفاع ثابت للصورة */}
+        <img
+        // @ts-ignore
+
+          src={medicine.imageUrl || "https://www.creativefabrica.com/wp-content/uploads/2020/07/17/Medicine-Logo-Graphics-4647232-1-1-580x386.jpg"}
+          alt={medicine.name}
+          className="w-full h-full object-cover"
+        />
+        {medicine.exp_date && new Date(medicine.exp_date) < new Date() && (
+          <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+            Expired
+          </span>
+        )}
+      </div>
+      
+      {/* محتوى الكارد */}
+      <div className="p-4 flex flex-col" style={{ height: 'calc(100% - 160px)' }}> {/* ارتفاع محسوب بدقة */}
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="text-lg font-semibold text-gray-800 line-clamp-1">{medicine.name}</h3>
+          <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full whitespace-nowrap">
+            {medicine.category}
+          </span>
+        </div>
+        
+        <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow-0">{medicine.description}</p>
+        
+        {/* معلومات الأدوية */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500">Price</p>
+            <p className="font-medium text-sm">${medicine.price}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500">Quantity</p>
+            <p className={`font-medium text-sm ${medicine.quantity < 10 ? 'text-red-500' : 'text-green-500'}`}>
+              {medicine.quantity} {medicine.quantity < 10 && '(Low)'}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500">Can Be Sell</p>
+            <div className="flex items-center">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={medicine.can_be_sell}
+                  onChange={() => handleToggleCanBeSell(medicine.id, !medicine.can_be_sell)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
+          </div>
+          {medicine.can_be_sell && (
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500">Sell Qty</p>
+              <p className="font-medium text-sm">{medicine.quantity_to_sell}</p>
+            </div>
+          )}
+          {medicine.can_be_sell && (
+            <div className="col-span-2 space-y-1">
+              <p className="text-xs text-gray-500">Sell Price</p>
+              <p className="font-medium text-sm">${medicine.price_sell}</p>
+            </div>
+          )}
+          <div className="col-span-2 space-y-1">
+            <p className="text-xs text-gray-500">Expiry Date</p>
+            <p className={`font-medium text-sm ${new Date(medicine.exp_date) < new Date() ? 'text-red-500' : 'text-gray-700'}`}>
+              {new Date(medicine.exp_date).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+        
+        {/* الأزرار ثابتة في الأسفل */}
+        <div className="mt-auto pt-3 border-t border-gray-100">
+          <div className="flex justify-between gap-2">
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => openEditModal(medicine)}
+              className="flex-1 bg-blue-50 text-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 transition-all duration-200 flex items-center justify-center text-xs sm:text-sm"
+            >
+              <FaEdit className="mr-1 text-xs sm:text-sm" /> Edit
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => handleDeleteMedicine(medicine.id)}
+              className="flex-1 bg-red-50 text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-100 transition-all duration-200 flex items-center justify-center text-xs sm:text-sm"
+            >
+              <FaTrash className="mr-1 text-xs sm:text-sm" /> Delete
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  ))}
+</div>
+
+              {/* Pagination Controls */}
+              {medicines.length > itemsPerPage && (
+                <div className="flex justify-center mt-8">
+                  <nav className="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => paginate(currentPage > 1 ? currentPage - 1 : 1)}
+                      disabled={currentPage === 1}
+                      className={`relative inline-flex items-center px-4 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
+                        currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-indigo-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Previous
+                    </button>
+                    
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(number => (
+                      <button
+                        key={number}
+                        onClick={() => paginate(number)}
+                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium ${
+                          currentPage === number 
+                            ? 'bg-indigo-600 text-white border-indigo-600' 
+                            : 'bg-white text-indigo-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {number}
+                      </button>
+                    ))}
+                    
+                    <button
+                      onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
+                      disabled={currentPage === totalPages}
+                      className={`relative inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
+                        currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-indigo-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </nav>
+                </div>
+              )}
+            </>
           )}
         </motion.div>
 
-        {/* Add/Edit Medicine Modal */}
-        {isModalOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 backdrop-blur-sm  bg-opacity-30 flex justify-center items-center p-4 z-50"
+   {/* Add/Edit Medicine Modal */}
+{isModalOpen && (
+  <motion.div 
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ duration: 0.2 }}
+    className="fixed inset-0 backdrop-blur-sm bg-opacity-30 flex justify-center items-center p-2 sm:p-4 z-50"
+  >
+    <motion.div
+      initial={{ scale: 0.95, y: 20 }}
+      animate={{ scale: 1, y: 0 }}
+      className="bg-white rounded-xl shadow-2xl w-full mx-2 sm:mx-0 sm:w-[95%] md:w-[90%] lg:max-w-md max-h-[90vh] overflow-y-auto"
+    >
+      <div className="p-4 sm:p-6">
+        <div className="flex justify-between items-center mb-3 sm:mb-4">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800">
+            {editingMedicine ? "Update Medicine" : "Add New Medicine"}
+          </h3>
+          <button
+            onClick={() => {
+              setIsModalOpen(false);
+              setEditingMedicine(null);
+            }}
+            className="text-gray-500 hover:text-gray-700 text-xl"
           >
-            <motion.div
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold text-gray-800">
-                    {editingMedicine ? "Update Medicine" : "Add New Medicine"}
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      setEditingMedicine(null);
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    ✕
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name*</label>
-                    <input
-                      type="text"
-                      name="name"
-                      placeholder="Medicine name"
-                      value={editingMedicine ? editingMedicine.name : newMedicine.name}
-                      onChange={handleInputChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category*</label>
-                      <select
-                        name="category"
-                        value={editingMedicine ? editingMedicine.category : newMedicine.category}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        <option value="Dental and oral agents">Dental and oral agents</option>
-                        <option value="Blood products">Blood products</option>
-                        <option value="Antibiotics">Antibiotics</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Price*</label>
-                      <input
-                        type="number"
-                        name="price"
-                        placeholder="0.00"
-                        value={editingMedicine ? editingMedicine.price : newMedicine.price}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      name="description"
-                      placeholder="Medicine description"
-                      value={editingMedicine ? editingMedicine.description : newMedicine.description}
-                      onChange={handleInputChange}
-                      rows={3}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Quantity*</label>
-                      <input
-                        type="number"
-                        name="quantity"
-                        placeholder="0"
-                        value={editingMedicine ? editingMedicine.quantity : newMedicine.quantity}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date*</label>
-                      <input
-                        type="date"
-                        name="exp_date"
-                        value={editingMedicine ? editingMedicine.exp_date : newMedicine.exp_date}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end gap-3 pt-4">
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => {
-                        setIsModalOpen(false);
-                        setEditingMedicine(null);
-                      }}
-                      className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all duration-300"
-                    >
-                      Cancel
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => editingMedicine ? handleUpdateMedicine(editingMedicine.id, editingMedicine) : handleAddMedicine()}
-                      className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 shadow-md"
-                    >
-                      {editingMedicine ? "Update Medicine" : "Add Medicine"}
-                    </motion.button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            ✕
+          </button>
+        </div>
+        
+        <div className="space-y-3 sm:space-y-4">
+          {/* Name Field */}
+          <div>
+            <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Name*</label>
+            <input
+              type="text"
+              name="name"
+              placeholder="Medicine name"
+              value={editingMedicine ? editingMedicine.name : newMedicine.name}
+              onChange={handleInputChange}
+              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+          </div>
+          
+          {/* Category & Price Row */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="flex-1">
+              <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Category*</label>
+              <select
+                name="category"
+                value={editingMedicine ? editingMedicine.category : newMedicine.category}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (editingMedicine) {
+                    setEditingMedicine({...editingMedicine, category: value});
+                  } else {
+                    setNewMedicine({...newMedicine, category: value});
+                  }
+                }}
+                className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              >
+                <option value="">Select Category</option>
+                <option value="Dental and oral agents">Dental and oral agents</option>
+                <option value="Blood products">Blood products</option>
+                <option value="Antibiotics">Antibiotics</option>
+              </select>
+            </div>
             
-          </motion.div>
+            <div className="flex-1">
+              <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Price*</label>
+              <input
+                type="number"
+                name="price"
+                placeholder="0.00"
+                value={editingMedicine ? editingMedicine.price : newMedicine.price}
+                onChange={handleInputChange}
+                className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+          </div>
+          
+          {/* Description */}
+          <div>
+            <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              name="description"
+              placeholder="Medicine description"
+              value={editingMedicine ? editingMedicine.description : newMedicine.description}
+              onChange={handleInputChange}
+              rows={3}
+              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          
+          {/* Quantity & Expiry Date Row */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="flex-1">
+              <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Quantity*</label>
+              <input
+                type="number"
+                name="quantity"
+                placeholder="0"
+                value={editingMedicine ? editingMedicine.quantity : newMedicine.quantity}
+                onChange={handleInputChange}
+                className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Expiry Date*</label>
+              <input
+                type="date"
+                name="exp_date"
+                value={editingMedicine ? editingMedicine.exp_date : newMedicine.exp_date}
+                onChange={handleInputChange}
+                className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+          </div>
 
-        )}
+          {/* Can Be Sell & Quantity to Sell Row */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="flex-1">
+              <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Can Be Sell</label>
+              <select
+                name="can_be_sell"
+                value={editingMedicine ? editingMedicine.can_be_sell.toString() : newMedicine.can_be_sell.toString()}
+                onChange={(e) => {
+                  const value = e.target.value === 'true';
+                  if (editingMedicine) {
+                    setEditingMedicine({...editingMedicine, can_be_sell: value});
+                  } else {
+                    setNewMedicine({...newMedicine, can_be_sell: value});
+                  }
+                }}
+                className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            
+            <div className="flex-1">
+              <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Quantity to Sell*</label>
+              <input
+                type="number"
+                name="quantity_to_sell"
+                placeholder="0"
+                value={editingMedicine ? editingMedicine.quantity_to_sell : newMedicine.quantity_to_sell}
+                onChange={handleInputChange}
+                className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Selling Price */}
+          <div>
+            <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Selling Price*</label>
+            <input
+              type="number"
+              name="price_sell"
+              placeholder="0.00"
+              value={editingMedicine ? editingMedicine.price_sell : newMedicine.price_sell}
+              onChange={handleInputChange}
+              className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+          </div>
+          
+          {/* Buttons */}
+          <div className="flex justify-end gap-3 pt-3 sm:pt-4">
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingMedicine(null);
+              }}
+              className="px-4 py-2 sm:px-5 sm:py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all duration-300 text-sm sm:text-base"
+            >
+              Cancel
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => editingMedicine ? handleUpdateMedicine(editingMedicine.id, editingMedicine) : handleAddMedicine()}
+              className="px-4 py-2 sm:px-5 sm:py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 shadow-md text-sm sm:text-base"
+            >
+              {editingMedicine ? "Update Medicine" : "Add Medicine"}
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  </motion.div>
+)}
         
         {/* Promotional Cards Section */}
         <motion.section

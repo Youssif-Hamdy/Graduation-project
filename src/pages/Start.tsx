@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useAnimation, AnimatePresence } from "framer-motion";
 import { useInView } from "react-intersection-observer";
@@ -6,6 +6,8 @@ import { useInView } from "react-intersection-observer";
 const Start: React.FC = () => {
   const navigate = useNavigate();
   const controls = useAnimation();
+  const [isOpen, setIsOpen] = useState(false);
+
   const [ref, inView] = useInView({
     threshold: 0.1,
     triggerOnce: false,
@@ -40,6 +42,48 @@ const Start: React.FC = () => {
       transition: {
         duration: 0.5,
         ease: "easeInOut"
+      }
+    }
+  };
+  const modalVariants = {
+    hidden: { 
+      opacity: 0,
+      scale: 0.8,
+      y: 50,
+      transition: { duration: 0.3 }
+    },
+    visible: { 
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: { 
+        duration: 0.4,
+        type: "spring",
+        damping: 25,
+        stiffness: 500
+      }
+    },
+    exit: { 
+      opacity: 0,
+      scale: 0.9,
+      y: 20,
+      transition: { duration: 0.2 }
+    }
+  };
+
+  const overlayVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1 },
+    exit: { opacity: 0 }
+  };
+
+  const staggerContainer = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.3
       }
     }
   };
@@ -93,6 +137,7 @@ const Start: React.FC = () => {
       },
     },
   };
+// @ts-ignore
 
   const floating = {
     hidden: { y: 0 },
@@ -173,6 +218,35 @@ const Start: React.FC = () => {
       description: "Quick prescription filling and delivery",
       image: "https://fastfarepharmacy.co.uk/wp-content/uploads/2022/02/fast-flare-about-300x265.jpg",
     },
+  ];
+  const pharmacyFeatures = [
+    {
+      icon: "💊",
+      title: "Comprehensive Medication Database",
+      description: "Access to thousands of FDA-approved medications with detailed information"
+    },
+    {
+      icon: "🏥",
+      title: "Pharmacy Network Integration",
+      description: "Connected with over 5,000 pharmacies nationwide for seamless service"
+    },
+    {
+      icon: "🔍",
+      title: "Advanced Search",
+      description: "Find medications by name, condition, or active ingredient"
+    },
+    {
+      icon: "🛡️",
+      title: "Safety Checks",
+      description: "Automatic drug interaction and allergy alerts"
+    }
+  ];
+
+  const medicineFacts = [
+    "Over 4 billion prescriptions are filled in the U.S. annually",
+    "The global pharmaceutical market is worth over $1.2 trillion",
+    "The first pharmacy was established in Baghdad in the 8th century",
+    "90% of Americans live within 5 miles of a pharmacy"
   ];
 
   // Handle navigation with smooth exit animation
@@ -414,6 +488,7 @@ const Start: React.FC = () => {
                     {section.text}
                   </motion.p>
                   <motion.button
+                    onClick={() => setIsOpen(true)}
                     className="mt-6 px-6 py-2 text-sm font-medium text-indigo-100 border border-indigo-300/30 rounded-lg hover:bg-indigo-900/30 hover:border-indigo-300/50 transition-all"
                     whileHover={{ 
                       scale: 1.05,
@@ -540,6 +615,8 @@ const Start: React.FC = () => {
                     </motion.div>
                     <motion.div
                       className="flex items-center justify-center w-16 h-16 mx-auto mb-4 text-3xl rounded-full bg-indigo-500/10"
+                      // @ts-ignore
+
                       variants={pulse}
                     >
                       {feature.icon}
@@ -765,6 +842,223 @@ const Start: React.FC = () => {
             </div>
           </motion.footer>
         </motion.div>
+      </AnimatePresence>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {/* Overlay */}
+            <motion.div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              variants={overlayVariants}
+              onClick={() => setIsOpen(false)}
+            />
+
+            {/* Modal Content */}
+            <motion.div
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-gray-900 rounded-2xl border border-indigo-300/20 shadow-2xl"
+              variants={modalVariants}
+            >
+              {/* Close Button */}
+              <motion.button
+                className="absolute top-4 right-4 z-10 p-2 text-indigo-100 hover:text-white rounded-full hover:bg-indigo-900/30 transition-colors"
+                onClick={() => setIsOpen(false)}
+                whileHover={{ rotate: 90, scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </motion.button>
+
+              {/* Modal Body */}
+              <div className="p-8">
+                {/* Header */}
+                <motion.div 
+                  className="text-center mb-10"
+                  variants={staggerContainer}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <motion.div
+                    className="flex justify-center mb-6"
+                    variants={fadeInUp}
+                  >
+                    <motion.div
+                     
+                     className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 shadow-lg"
+                                       // @ts-ignore 
+
+                      variants={pulse}
+
+                    >
+                      <span className="text-3xl">🏥</span>
+                    </motion.div>
+                  </motion.div>
+
+                  <motion.h2 
+                    className="text-3xl font-bold text-white mb-2"
+                    variants={fadeInUp}
+                  >
+                    Modern Pharmacy Solutions
+                  </motion.h2>
+                  <motion.p 
+                    className="text-lg text-indigo-100 max-w-2xl mx-auto"
+                    variants={fadeInUp}
+                  >
+                    Connecting patients with advanced pharmaceutical services and medication management
+                  </motion.p>
+                </motion.div>
+
+                {/* Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Column - Features */}
+                  <motion.div
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    <motion.h3 
+                      className="text-xl font-semibold text-white mb-6 border-b border-indigo-300/20 pb-2"
+                      variants={fadeInUp}
+                    >
+                      Our Pharmacy Services
+                    </motion.h3>
+
+                    <div className="space-y-6">
+                      {pharmacyFeatures.map((feature, index) => (
+                        <motion.div
+                          key={index}
+                          className="flex items-start p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-indigo-300/30 transition-all"
+                          variants={fadeInUp}
+                          whileHover={{ y: -3 }}
+                        >
+                          <div className="flex-shrink-0 mr-4">
+                            <motion.div 
+                              className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-500/10 text-xl"
+                              whileHover={{ rotate: [0, 10, -10, 0] }}
+                              transition={{ duration: 0.5 }}
+                            >
+                              {feature.icon}
+                            </motion.div>
+                          </div>
+                          <div>
+                            <motion.h4 
+                              className="text-lg font-medium text-white mb-1"
+                              whileHover={{ color: "#a5b4fc" }}
+                            >
+                              {feature.title}
+                            </motion.h4>
+                            <motion.p className="text-indigo-100">
+                              {feature.description}
+                            </motion.p>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+
+                  {/* Right Column - Medicine Info */}
+                  <motion.div
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    <motion.h3 
+                      className="text-xl font-semibold text-white mb-6 border-b border-indigo-300/20 pb-2"
+                      variants={fadeInUp}
+                    >
+                      About Medications
+                    </motion.h3>
+
+                    <motion.div 
+                      className="relative h-64 rounded-xl overflow-hidden mb-6"
+                      variants={fadeInUp}
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <img 
+                        src="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" 
+                        alt="Pharmacy shelves" 
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                      <div className="absolute bottom-0 left-0 p-6">
+                        <motion.h4 
+                          className="text-xl font-bold text-white mb-2"
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.6 }}
+                        >
+                          Medication Safety
+                        </motion.h4>
+                        <motion.p 
+                          className="text-indigo-100"
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.7 }}
+                        >
+                          Our system ensures proper dosage, interactions, and allergy checks
+                        </motion.p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div 
+                      className="p-6 rounded-xl bg-indigo-900/20 border border-indigo-300/20"
+                      variants={fadeInUp}
+                    >
+                      <motion.h4 
+                        className="text-lg font-semibold text-white mb-4 flex items-center"
+                        whileHover={{ x: 5 }}
+                      >
+                        <svg className="w-5 h-5 mr-2 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Did You Know?
+                      </motion.h4>
+                      <ul className="space-y-3">
+                        {medicineFacts.map((fact, index) => (
+                          <motion.li 
+                            key={index}
+                            className="flex items-start text-indigo-100"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.5 + index * 0.1 }}
+                          >
+                            <svg className="w-4 h-4 mt-1 mr-2 text-indigo-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            {fact}
+                          </motion.li>
+                        ))}
+                      </ul>
+                    </motion.div>
+                  </motion.div>
+                </div>
+
+                {/* CTA */}
+                <motion.div 
+                  className="mt-12 text-center"
+                  variants={fadeInUp}
+                >
+                  <motion.button
+                    onClick={() => setIsOpen(false)}
+                    className="px-8 py-3 text-base font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Got it, thanks!
+                  </motion.button>
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

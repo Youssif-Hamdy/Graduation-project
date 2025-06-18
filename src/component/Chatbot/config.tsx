@@ -1,6 +1,9 @@
 import { createChatBotMessage } from 'react-chatbot-kit';
 
 const config = {
+  // @ts-ignore
+
+  
   initialMessages: [createChatBotMessage("Hello! How can I assist you?")],
   botName: "Smart PharmaNet",
   customStyles: {
