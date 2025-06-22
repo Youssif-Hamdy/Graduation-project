@@ -37,13 +37,14 @@ const MapWithNoSSR = lazy(() => import('./PharmacyMap'));
 interface Medicine {
   id: string;
   medicine_name: string;
+  medicine_id: number;
   medicine_price_to_sell: string;
   medicine_quantity_to_sell: string;
   pharmacy_name: string;
+  pharmacy_id: number; 
   pharmacy_latitude: string;
   pharmacy_longitude: string;
 }
-
 const Exchange: React.FC = () => {
  const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -91,11 +92,10 @@ const Exchange: React.FC = () => {
     }
   };
 
-  // Token refresh interval
   useEffect(() => {
     const interval = setInterval(async () => {
       await refreshToken();
-    }, 10 * 60 * 1000); // Refresh every 10 minutes
+    }, 10 * 60 * 1000); 
 
     return () => clearInterval(interval);
   }, []);
@@ -227,42 +227,58 @@ const Exchange: React.FC = () => {
   }, []);
  const handleBuyClick = (medicine: Medicine) => {
     setSelectedMedicineForBuy(medicine);
-    setSelectedMedicineForDetails(null); // إغلاق مودال التفاصيل إذا كان مفتوحاً
+    setSelectedMedicineForDetails(null);
     setQuantity(1);
     setShowBuyModal(true);
   };
- const handleBuyOrder = async () => {
-    const token = localStorage.getItem('accessToken');
-    if (!token || !selectedMedicineForBuy) return;
 
-    try {
-      const response = await fetch('https://smart-pharma-net.vercel.app/exchange/buy/order', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          medicine_name: selectedMedicineForBuy.medicine_name,
-          quantity: quantity,
-          price: selectedMedicineForBuy.medicine_price_to_sell,
-          status: "Pending",
-          pharmacy_seller: 0
-        }),
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to place order');
-      }
 
-      toast.success('Order placed successfully!');
-      setShowBuyModal(false);
-      setSelectedMedicineForBuy(null);
-    } catch (error) {
-      console.error('Error placing order:', error);
-      toast.error('Failed to place order');
+const handleBuyOrder = async () => {
+  if (!selectedMedicineForBuy) return;
+    const pharmacyBuyer = localStorage.getItem('pharmacyName') || 'Unknown Buyer';
+
+
+ const orderData = {
+  medicine_name: selectedMedicineForBuy.medicine_name,
+  price: selectedMedicineForBuy.medicine_price_to_sell,
+  quantity: quantity,
+  pharmacy_seller: selectedMedicineForBuy.pharmacy_name,
+  pharmacy_buyer: pharmacyBuyer, 
+
+  status: "Pending"
+};
+
+
+  console.log("Order Data Being Sent:", orderData);
+
+  try {
+    const response = await fetch('https://smart-pharma-net.vercel.app/exchange/buy/order', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(orderData)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Request failed");
     }
-  };
+
+    toast.success("Purchase completed successfully!");
+    setShowBuyModal(false);
+  } catch (error) {
+    console.error("Order Error Details:", {
+      error: error,
+      requestData: orderData
+    });
+    toast.error(error.message || "An error occurred while trying to complete the purchase");
+  }
+};
+
+
   const filteredMedicines = medicines.filter(medicine =>
     medicine.medicine_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     medicine.pharmacy_name.toLowerCase().includes(searchTerm.toLowerCase())

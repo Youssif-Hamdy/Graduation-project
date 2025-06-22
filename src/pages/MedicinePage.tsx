@@ -7,6 +7,8 @@ import "react-toastify/dist/ReactToastify.css";
 import { FaPlus, FaEdit, FaTrash, FaSignOutAlt, FaSearch, FaPills, FaTags, FaShieldAlt, FaShippingFast, FaExchangeAlt, FaRetweet } from "react-icons/fa";
 import { useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
+import NotificationBell from "./NotificationBell";
+
 
 interface Medicine {
   id: number;
@@ -453,6 +455,7 @@ useEffect(() => {
 
   return (
     <div className="p-4 sm:p-8 bg-gray-50 min-h-screen">
+       <NotificationBell />
       <div className="container mx-auto">
         {/* Header Section */}
         <motion.div 
