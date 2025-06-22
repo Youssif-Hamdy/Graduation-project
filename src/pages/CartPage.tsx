@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import toast, { Toaster } from 'react-hot-toast';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // SVG Icons
 const MedicineIcon = () => (
@@ -117,51 +118,40 @@ const OrdersDashboard: React.FC = () => {
     }
   };
 
-  const updateOrderStatus = async (id: number, newStatus: 'Pending' | 'Completed' | 'Cancelled') => {
-    if (newStatus === 'Completed') {
-      // Show confirmation toast for Complete action
-      const confirmed = await new Promise((resolve) => {
-        toast(
-          (t) => (
-            <div className="flex flex-col items-center">
-              <p className="font-medium mb-2">Are you sure you want to complete this order?</p>
-              <p className="text-sm text-gray-600 mb-4">This action cannot be undone.</p>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => {
-                    toast.dismiss(t.id);
-                    resolve(true);
-                  }}
-                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => {
-                    toast.dismiss(t.id);
-                    resolve(false);
-                  }}
-                  className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ),
-          {
-            duration: Infinity, // Toast won't auto-dismiss
-            style: {
-              maxWidth: '500px',
-            },
-          }
-        );
-      });
-
-      if (!confirmed) {
-        return; // User cancelled the action
+  const confirmComplete = (id: number) => {
+    toast.info(
+      <div className="p-2">
+        <p className="font-medium">Are you sure you want to complete this order?</p>
+        <p className="text-sm mt-1">By completing, you confirm the purchase and this action cannot be undone.</p>
+        <div className="flex justify-end space-x-2 mt-3">
+          <button 
+            onClick={() => {
+              toast.dismiss();
+              updateOrderStatus(id, 'Completed');
+            }}
+            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+          >
+            Confirm
+          </button>
+          <button 
+            onClick={() => toast.dismiss()} 
+            className="px-3 py-1 bg-gray-300 text-gray-800 rounded text-sm hover:bg-gray-400"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>,
+      {
+        position: "top-center",
+        autoClose: false,
+        closeOnClick: false,
+        draggable: false,
+        closeButton: false,
       }
-    }
+    );
+  };
 
+  const updateOrderStatus = async (id: number, newStatus: 'Pending' | 'Completed' | 'Cancelled') => {
     try {
       setUpdatingId(id);
       const accessToken = localStorage.getItem('accessToken');
@@ -196,16 +186,17 @@ const OrdersDashboard: React.FC = () => {
         )
       );
 
-      // Show success toast
-      toast.success(`Order status updated to ${newStatus}`, {
-        position: 'top-right',
-        duration: 3000,
-      });
+      if (newStatus === 'Completed') {
+        toast.success(`Order #${id} marked as completed successfully!`, {
+          position: "top-right",
+          autoClose: 3000,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update status');
-      toast.error('Failed to update order status', {
-        position: 'top-right',
-        duration: 3000,
+      toast.error(`Failed to update order status: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+        position: "top-right",
+        autoClose: 3000,
       });
     } finally {
       setUpdatingId(null);
@@ -318,18 +309,16 @@ const OrdersDashboard: React.FC = () => {
   }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ 
-        opacity: 1,
-        transition: { duration: 0.5, ease: "easeOut" }
-      }}
-      className="min-h-screen bg-gray-50 p-4 md:p-8"
-    >
-      {/* Toast Notifications */}
-      <Toaster position="top-right" />
-
-      <div className="max-w-7xl mx-auto pt-12 md:pt-20">
+    <div className="min-h-screen bg-gray-50">
+      <ToastContainer />
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ 
+          opacity: 1,
+          transition: { duration: 0.5, ease: "easeOut" }
+        }}
+        className="p-4 md:p-8 max-w-7xl mx-auto "
+      >
         {/* Header */}
         <motion.header
           initial={{ y: -50, opacity: 0 }}
@@ -342,7 +331,7 @@ const OrdersDashboard: React.FC = () => {
               damping: 20
             }
           }}
-          className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8"
+          className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pt"
         >
           <div>
             <motion.h1 
@@ -362,7 +351,7 @@ const OrdersDashboard: React.FC = () => {
               >
                 <MedicineIcon />
               </motion.span>
-              Pharmacy Orders
+              Pharmacy Orders Dashboard
             </motion.h1>
             <motion.p 
               initial={{ opacity: 0 }}
@@ -387,11 +376,11 @@ const OrdersDashboard: React.FC = () => {
             }}
             onClick={handleRefresh}
             disabled={refreshing}
-            className="mt-4 md:mt-0 flex items-center px-3 py-1 md:px-4 md:py-2 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all text-sm md:text-base"
+            className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all text-sm md:text-base"
           >
             <RefreshIcon spinning={refreshing} />
             <span className="ml-2">
-              {refreshing ? 'Refreshing...' : 'Refresh'}
+              {refreshing ? 'Refreshing...' : 'Refresh Orders'}
             </span>
           </motion.button>
         </motion.header>
@@ -411,7 +400,7 @@ const OrdersDashboard: React.FC = () => {
                 }
               }}
               exit={{ opacity: 0 }}
-              className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 md:p-4 mb-4 md:mb-6 rounded-lg shadow"
+              className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow"
               role="alert"
             >
               <div className="flex items-center">
@@ -443,7 +432,7 @@ const OrdersDashboard: React.FC = () => {
                 duration: 0.6
               }
             }}
-            className="bg-white rounded-xl shadow-lg p-6 md:p-8 text-center"
+            className="bg-white rounded-xl shadow-lg p-8 text-center"
           >
             <motion.div
               animate={{ 
@@ -455,18 +444,18 @@ const OrdersDashboard: React.FC = () => {
                 }
               }}
             >
-              <svg className="w-10 h-10 md:w-12 md:h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </motion.div>
-            <h3 className="mt-3 md:mt-4 text-lg md:text-xl font-medium text-gray-900">No orders found</h3>
-            <p className="mt-1 md:mt-2 text-sm md:text-base text-gray-500">Your pharmacy doesn't have any orders yet.</p>
-            <div className="mt-4 md:mt-6">
+            <h3 className="mt-4 text-lg md:text-xl font-medium text-gray-900">No orders found</h3>
+            <p className="mt-2 text-gray-500 text-sm md:text-base">Your pharmacy doesn't have any orders yet.</p>
+            <div className="mt-6">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleRefresh}
-                className="inline-flex items-center px-3 py-1 md:px-4 md:py-2 border border-transparent shadow-sm text-xs md:text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <RefreshIcon spinning={false} />
                 <span className="ml-2">Refresh Orders</span>
@@ -486,13 +475,13 @@ const OrdersDashboard: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medicine</th>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Buyer</th>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Price</th>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Date</th>
-                    <th scope="col" className="px-4 py-3 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medicine</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buyer</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th scope="col" className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -512,95 +501,86 @@ const OrdersDashboard: React.FC = () => {
                         }}
                         exit={{ opacity: 0 }}
                         whileHover={{ 
-                          scale: 1,
+                          scale: 1.01,
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                           zIndex: 10
                         }}
                         className="relative hover:shadow-md"
                       >
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap">
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <motion.div 
                               whileHover={{ rotate: 15 }}
-                              className="flex-shrink-0 h-8 w-8 md:h-10 md:w-10 rounded-full bg-indigo-100 flex items-center justify-center"
+                              className="flex-shrink-0 h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center"
                             >
                               <MedicineIcon />
                             </motion.div>
-                            <div className="ml-3 md:ml-4">
+                            <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900">{order.med_name}</div>
-                              <div className="text-xs text-gray-500">ID: {order.id}</div>
+                              <div className="text-sm text-gray-500">ID: {order.id}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap hidden sm:table-cell">
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <HospitalIcon />
-                            <div className="ml-2 text-sm text-gray-900 font-medium truncate max-w-xs">{order.pharma_buyer}</div>
+                            <div className="ml-2 text-sm text-gray-900 font-medium">{order.pharma_buyer}</div>
                           </div>
                         </td>
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap">
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900 flex items-center">
                             <QuantityIcon />
                             <span className="ml-1">{order.quantity}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap hidden md:table-cell">
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900 flex items-center">
                             <PriceIcon />
                             <span className="ml-1">{formatPrice(order.price)}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap">
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <motion.span 
                             whileHover={{ scale: 1.1 }}
-                            className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status).bg} ${getStatusColor(order.status).text}`}
+                            className={`px-2 md:px-3 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status).bg} ${getStatusColor(order.status).text}`}
                           >
                             <span className="mr-1">
                               {getStatusColor(order.status).icon}
                             </span>
-                            <span className="hidden sm:inline">{order.status}</span>
+                            {order.status}
                           </motion.span>
                         </td>
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(order.created_at)}
                         </td>
-                        <td className="px-4 py-4 md:px-6 md:py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-1 md:space-x-2">
-                            {order.status !== 'Completed' && (
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => updateOrderStatus(order.id, 'Completed')}
-                                disabled={updatingId === order.id}
-                                className={`px-2 py-1 md:px-3 md:py-1 rounded-md text-xs ${order.status === 'Completed' ? 'bg-green-200 text-green-800 cursor-not-allowed' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
-                              >
-                                {updatingId === order.id && order.status !== 'Completed' ? (
-                                  <motion.span
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                    className="inline-block w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full"
-                                  />
-                                ) : (
-                                  'Complete'
-                                )}
-                              </motion.button>
-                            )}
-                            {order.status !== 'Completed' && (
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => updateOrderStatus(order.id, 'Cancelled')}
-                                disabled={updatingId === order.id}
-                                className={`px-2 py-1 md:px-3 md:py-1 rounded-md text-xs ${order.status === 'Cancelled' ? 'bg-red-200 text-red-800 cursor-not-allowed' : 'bg-red-100 text-red-800 hover:bg-red-200'}`}
-                              >
-                                Cancel
-                              </motion.button>
-                            )}
-                            {order.status === 'Completed' && (
-                              <span className="px-2 py-1 md:px-3 md:py-1 rounded-md text-xs bg-green-200 text-green-800">
-                                Done
-                              </span>
-                            )}
+                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => confirmComplete(order.id)}
+                              disabled={order.status === 'Completed' || updatingId === order.id}
+                              className={`px-2 md:px-3 py-1 rounded-md text-xs ${order.status === 'Completed' ? 'bg-green-200 text-green-800 cursor-not-allowed' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
+                            >
+                              {updatingId === order.id && order.status !== 'Completed' ? (
+                                <motion.span
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                  className="inline-block w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full"
+                                />
+                              ) : (
+                                'Complete'
+                              )}
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => updateOrderStatus(order.id, 'Cancelled')}
+                              disabled={order.status === 'Cancelled' || updatingId === order.id}
+                              className={`px-2 md:px-3 py-1 rounded-md text-xs ${order.status === 'Cancelled' ? 'bg-red-200 text-red-800 cursor-not-allowed' : 'bg-red-100 text-red-800 hover:bg-red-200'}`}
+                            >
+                              Cancel
+                            </motion.button>
                           </div>
                         </td>
                       </motion.tr>
@@ -611,8 +591,8 @@ const OrdersDashboard: React.FC = () => {
             </div>
           </motion.div>
         )}
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 };
 

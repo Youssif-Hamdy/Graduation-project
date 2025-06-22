@@ -66,43 +66,34 @@ const NotificationBell: React.FC = () => {
     }
   };
 
- const fetchHistoryNotifications = async () => {
-  const token = localStorage.getItem('accessToken');
-  if (!token) {
-    console.error('No access token found');
-    toast.error('Authentication required');
-    return;
-  }
-
-  setIsHistoryLoading(true);
-  try {
-    const response = await fetch('https://smart-pharma-net.vercel.app/exchange/get_notification/', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('API Error:', errorData);
-      toast.error(errorData.message || 'Failed to fetch notifications');
+  const fetchHistoryNotifications = async () => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      console.error('No access token found');
       return;
     }
 
-    const data = await response.json();
-    console.log('History notifications data:', data); // لأغراض debugging
-    setHistoryNotifications(data);
-  } catch (error) {
-    console.error('Error fetching history notifications:', error);
-    toast.error('Failed to load history notifications');
-  } finally {
-    setIsHistoryLoading(false);
-  }
-};
+    setIsHistoryLoading(true);
+    try {
+      const response = await fetch('https://smart-pharma-net.vercel.app/exchange/get_notification/', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+      }
 
+      const data = await response.json();
+      setHistoryNotifications(data);
+    } catch (error) {
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
 
   const updateNotificationStatus = async (id: string, newStatus: 'Pending' | 'Completed' | 'Cancelled', med_name: string) => {
     const token = localStorage.getItem('accessToken');
@@ -268,7 +259,32 @@ const NotificationBell: React.FC = () => {
                         {formatTime(notification.created_at)}
                       </div>
                       
-                     
+                      {notification.status === 'Pending' && (
+                        <div className="flex justify-end space-x-2 mt-2">
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateNotificationStatus(notification.id, 'Completed', notification.med_name);
+                            }}
+                            className="text-xs bg-green-500 text-white px-3 py-1 rounded flex items-center hover:bg-green-600 transition-colors"
+                          >
+                            <FaCheck className="mr-1" /> Complete
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateNotificationStatus(notification.id, 'Cancelled', notification.med_name);
+                            }}
+                            className="text-xs bg-red-500 text-white px-3 py-1 rounded flex items-center hover:bg-red-600 transition-colors"
+                          >
+                            <FaTimes className="mr-1" /> Cancel
+                          </motion.button>
+                        </div>
+                      )}
                     </motion.div>
                   ))
                 )
