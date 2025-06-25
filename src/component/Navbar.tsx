@@ -225,6 +225,13 @@ const Navbar: React.FC = () => {
     if (!name) return '';
     return name.slice(0, 2).toUpperCase();
   };
+   const handlePricingClick = (e: React.MouseEvent) => {
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) {
+      e.preventDefault();
+      navigate('/pharmacy-login');
+    }
+  };
 
   return (
     <div className="bg-indigo-500">
@@ -270,11 +277,12 @@ const Navbar: React.FC = () => {
             </li>
             <li>
               <NavLink
-                to="/about"
-                className={({ isActive }) => `text-sm ${isActive ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-500'} transition duration-200`}
-              >
-                About Us
-              </NavLink>
+          to="/pricing"
+          className={({ isActive }) => `text-sm ${isActive ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-500'} transition duration-200`}
+          onClick={handlePricingClick}
+        >
+          Pricing
+        </NavLink>
             </li>
             <li className="text-gray-300">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" className="w-4 h-4 current-fill" viewBox="0 0 24 24">
@@ -413,22 +421,25 @@ const Navbar: React.FC = () => {
                 </NavLink>
               </li>
               <li>
-                <NavLink
-                  to="/about"
-                  className={({ isActive }) =>
-                    `block p-4 text-sm font-semibold ${
-                      isActive 
-                        ? 'text-indigo-600 bg-indigo-50 border-l-4 border-indigo-600' 
-                        : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 border-l-4 border-transparent'
-                    } rounded-lg transition-all duration-200 flex items-center`
-                  }
-                  onClick={toggleMenu}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  About Us
-                </NavLink>
+              <NavLink
+          to="/pricing"
+          className={({ isActive }) =>
+            `block p-4 text-sm font-semibold ${
+              isActive 
+                ? 'text-indigo-600 bg-indigo-50 border-l-4 border-indigo-600' 
+                : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 border-l-4 border-transparent'
+            } rounded-lg transition-all duration-200 flex items-center`
+          }
+          onClick={(e) => {
+            handlePricingClick(e);
+            toggleMenu();
+          }}
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Pricing
+        </NavLink>
               </li>
               <li>
                 <NavLink

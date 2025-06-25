@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FaAllergies, FaBox, FaCalendarAlt, FaCamera, FaCapsules, FaChevronDown, FaChevronLeft, FaChevronRight, FaDollarSign, FaFileAlt, FaFlask, FaHeadset, FaHeartbeat, FaImage, FaInfoCircle, FaMapMarkerAlt, FaMicrophone, FaPills, FaPrescriptionBottleAlt, FaSearch, FaShieldAlt, FaSpinner, FaSyringe, FaTimes, FaTruck } from "react-icons/fa";
 import Tesseract from 'tesseract.js';
+import ChatIcon from "./ChatIcon";
 
 interface PharmacyLocation {
   latitude: number;
@@ -1551,6 +1552,7 @@ const sortedMedicines = [...filteredMedicines].sort((a, b) => {
     </motion.div>
   )}
 </AnimatePresence>
+<ChatIcon />
     </div>
   );
 }

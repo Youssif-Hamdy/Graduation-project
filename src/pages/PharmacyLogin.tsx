@@ -95,6 +95,10 @@ const PharmacyLogin: React.FC = () => {
       localStorage.setItem('accessToken', response.data.access);
       localStorage.setItem('refreshToken', response.data.refresh);
       localStorage.setItem('pharmacyName', name);
+  if (response.data.pharmacy && response.data.pharmacy.id) {
+      localStorage.setItem('pharmacyId', response.data.pharmacy.id.toString());
+    }
+      
 
       navigate('/medicine', { state: { pharmacyName: name } });
     } catch (err: any) {

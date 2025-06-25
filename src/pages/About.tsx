@@ -1,9 +1,6 @@
 import { motion } from 'framer-motion';
-import { FaMapMarkerAlt, FaPhone, FaEnvelope, FaClock, FaRobot, FaTimes } from 'react-icons/fa';
-import Chatbot from 'react-chatbot-kit';
-import ActionProvider from '../component/Chatbot/ActionProvider';
-import MessageParser from '../component/Chatbot/MessageParser';
-import config from '../component/Chatbot/config';
+import { FaMapMarkerAlt, FaPhone, FaEnvelope, FaClock } from 'react-icons/fa';
+
 import { useState } from 'react';
 
 function About() {
@@ -22,29 +19,8 @@ function About() {
     visible: { x: 0, opacity: 1, transition: { duration: 1 } },
   };
 
-  const robotAnimation = {
-    float: {
-      y: [0, -10, 0],
-      transition: {
-        duration: 2,
-        repeat: Infinity,
-        ease: "easeInOut",
-      },
-    },
-  };
+ 
 
-  const dotsAnimation = {
-    float: {
-      y: [0, -5, 0],
-      transition: {
-        duration: 1.5,
-        repeat: Infinity,
-        ease: "easeInOut",
-      },
-    },
-  };
-
-  const [showChatbot, setShowChatbot] = useState(false);
   // @ts-ignore
 
   const [showMessage, setShowMessage] = useState(false);
@@ -55,71 +31,7 @@ function About() {
 
   return (
     <div className="min-h-screen bg-white pt-20 px-4 sm:px-6 lg:px-8">
-      <div style={{ position: 'fixed', bottom: '100px', right: '20px', zIndex: 1000 }}>
-        <motion.div
-          animate="float"
-          variants={robotAnimation}
-          style={{ cursor: 'pointer', textAlign: 'center' }}
-        >
-          <FaRobot className="text-6xl text-indigo-600" />
-        </motion.div>
-
-        <motion.div
-          animate="float"
-          variants={dotsAnimation}
-          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '10px' }}
-          onClick={() => {
-            setShowChatbot(true);
-            setShowMessage(true);
-          }}
-        >
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#4F46E5' }}></div>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#4F46E5' }}></div>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#4F46E5' }}></div>
-        </motion.div>
-
-        {showChatbot && (
-         <div
-         style={{
-           position: 'absolute',
-           bottom: '120px',
-           right: '0',
-           width: '350px',
-           backgroundColor: '#ffffff',
-           borderRadius: '10px',
-           boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)',
-           overflow: 'hidden',
-           border: '1px solid #e0e0e0',
-           transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-           transform: showChatbot ? 'translateY(0)' : 'translateY(20px)',
-           opacity: showChatbot ? 1 : 0,
-           visibility: showChatbot ? 'visible' : 'hidden',
-         }}
-       >
-         <div
-           style={{
-             position: 'absolute',
-             top: '10px',
-             right: '10px',
-             cursor: 'pointer',
-             fontSize: '15px',
-             color: '#4F46E5', 
-             transition: 'color 0.2s ease', 
-           }}
-           onClick={() => setShowChatbot(false)} 
-           onMouseEnter={(e) => (e.currentTarget.style.color = '#3730A3')} 
-           onMouseLeave={(e) => (e.currentTarget.style.color = '#4F46E5')} 
-         >
-           <FaTimes />
-         </div>
-            <Chatbot
-              config={config}
-              actionProvider={ActionProvider}
-              messageParser={MessageParser}
-            />
-          </div>
-        )}
-      </div>
+    
 
       <div className="container mx-auto">
         <motion.div initial="hidden" animate="visible" variants={fadeIn} className="text-center">

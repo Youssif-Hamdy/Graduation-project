@@ -9,6 +9,7 @@ import Start from "./pages/Start";
 import PharmacyLogin from "./pages/PharmacyLogin";
 import Exchange from "./pages/Exchange";
 import CartPage from "./pages/CartPage";
+import Pricing from "./pages/Pricing";
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isLoggedIn = localStorage.getItem("token"); 
@@ -37,6 +38,8 @@ const App: React.FC = () => {
         <Route path="/pharmacy-login" element={<PharmacyLogin />} /> 
         <Route path="/exchange" element={<Exchange />} /> 
         <Route path="/cart" element={<CartPage />} />
+         <Route path="/pricing" element={<Pricing />} />
+
 
 
       </Route>
