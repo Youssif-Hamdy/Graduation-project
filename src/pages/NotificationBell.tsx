@@ -32,116 +32,162 @@ const NotificationBell: React.FC = () => {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'notifications' | 'history'>('notifications');
 
-  const fetchNotifications = async () => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      console.error('No access token found');
-      return;
+const fetchNotifications = async () => {
+  const ownerToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('accessToken');
+  const pharmacyId = localStorage.getItem('pharmacy_id');
+
+  let token = '';
+  let url = '';
+
+  if (ownerToken && pharmacyId) {
+    token = ownerToken;
+    url = `https://smart-pharma-net.vercel.app/exchange/get/pharmcy_seller/orders/${pharmacyId}/`;
+  } else if (userToken) {
+    token = userToken;
+    url = `https://smart-pharma-net.vercel.app/exchange/get/pharmcy_seller/orders/`;
+  } else {
+    console.error('Authentication required');
+    toast.error('Authentication required');
+    return;
+  }
+
+  setIsLoading(true);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('API Error:', errorData);
+      throw new Error(errorData.message || 'Failed to fetch notifications');
     }
 
-    setIsLoading(true);
-    try {
-      const response = await fetch('https://smart-pharma-net.vercel.app/exchange/get/pharmcy_seller/orders', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    const data = await response.json();
+    setNotifications(data);
+    setUnreadCount(data.filter((n: Notification) => n.status === 'Pending').length);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    toast.error('Failed to load notifications');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API Error:', errorData);
-        throw new Error(errorData.message || 'Failed to fetch notifications');
-      }
 
-      const data = await response.json();
-      setNotifications(data);
-      setUnreadCount(data.filter((n: Notification) => n.status === 'Pending').length);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      toast.error('Failed to load notifications');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const fetchHistoryNotifications = async () => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      console.error('No access token found');
+  const ownerToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('accessToken');
+
+  let token = '';
+  let apiUrl = '';
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem('pharmacy_id');
+    if (!pharmacyId) {
+      console.error('Pharmacy ID not found');
+      toast.error('Pharmacy ID is missing');
       return;
     }
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/get_notification/pharmacy/${pharmacyId}/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/get_notification/`;
+    token = userToken;
+  } else {
+    console.error('No access token found');
+    toast.error('Authentication required. Please login.');
+    return;
+  }
 
-    setIsHistoryLoading(true);
-    try {
-      const response = await fetch('https://smart-pharma-net.vercel.app/exchange/get_notification/', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  setIsHistoryLoading(true);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-      }
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-      const data = await response.json();
-      setHistoryNotifications(data);
-    } catch (error) {
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  };
-
-  const updateNotificationStatus = async (id: string, newStatus: 'Pending' | 'Completed' | 'Cancelled', med_name: string) => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      toast.error('Authentication required');
-      return;
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error fetching notifications:", errorData);
+      throw new Error(errorData.message || 'Failed to fetch notifications');
     }
 
-    try {
-      const response = await fetch(`https://smart-pharma-net.vercel.app/exchange/update_status/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
+    const data = await response.json();
+    setHistoryNotifications(data);
+  } catch (error) {
+    console.error("Fetch history error:", error);
+    // @ts-ignore
+    toast.error(error.message || "Error loading history notifications");
+  } finally {
+    setIsHistoryLoading(false);
+  }
+};
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API Error:', errorData);
-        throw new Error(errorData.message || 'Failed to update status');
-      }
 
-      // Add to action history
-      const actionText = newStatus === 'Completed' ? 'completed' : 'cancelled';
-      setActionHistory(prev => [
-        {
-          med_name: med_name,
-          action: actionText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        },
-        ...prev
-      ]);
+ const updateNotificationStatus = async (
+  id: string,
+  newStatus: 'Pending' | 'Completed' | 'Cancelled',
+  med_name: string
+) => {
+  const ownerToken = localStorage.getItem('token');
 
-      toast.success(`${med_name} marked as ${actionText}`);
+  const token = ownerToken ;
 
-      // Optimistically update the local state
-      setNotifications(prev => prev.map(n => 
-        n.id === id ? {...n, status: newStatus} : n
-      ));
-      setUnreadCount(prev => newStatus === 'Pending' ? prev + 1 : prev);
-      
-    } catch (error) {
-      console.error('Error updating notification status:', error);
-      toast.error(`Failed to update status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  if (!token) {
+    toast.error('Authentication required');
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://smart-pharma-net.vercel.app/exchange/update_status/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: newStatus }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('API Error:', errorData);
+      throw new Error(errorData.message || 'Failed to update status');
     }
-  };
+
+    const actionText = newStatus === 'Completed' ? 'completed' : 'cancelled';
+    setActionHistory(prev => [
+      {
+        med_name: med_name,
+        action: actionText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      },
+      ...prev
+    ]);
+
+    toast.success(`${med_name} marked as ${actionText}`);
+
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, status: newStatus } : n)
+    );
+
+    setUnreadCount(prev => newStatus === 'Pending' ? prev + 1 : prev);
+  } catch (error) {
+    console.error('Error updating notification status:', error);
+    toast.error(`Failed to update status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
 
   useEffect(() => {
     fetchNotifications();

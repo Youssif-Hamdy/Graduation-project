@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { FaAllergies, FaBox, FaCalendarAlt, FaCamera, FaCapsules, FaChevronDown, FaChevronLeft, FaChevronRight, FaDollarSign, FaFileAlt, FaFlask, FaHeadset, FaHeartbeat, FaImage, FaInfoCircle, FaMapMarkerAlt, FaMicrophone, FaPills, FaPrescriptionBottleAlt, FaSearch, FaShieldAlt, FaSpinner, FaSyringe, FaTimes, FaTruck } from "react-icons/fa";
+import { FaAllergies, FaBox, FaCalendarAlt, FaCamera, FaCapsules, FaChevronDown, FaChevronLeft, FaChevronRight, FaDollarSign, FaFileAlt, FaFlask, FaHeadset, FaHeartbeat, FaImage, FaInfoCircle, FaMapMarkerAlt, FaMicrophone, FaPills, FaPrescriptionBottleAlt, FaSearch, FaShieldAlt, FaShoppingCart, FaSpinner, FaSyringe, FaTimes, FaTruck } from "react-icons/fa";
 import Tesseract from 'tesseract.js';
 import ChatIcon from "./ChatIcon";
 
@@ -16,6 +16,7 @@ interface PharmacyLocation {
 interface Medicine {
   id: number;
   name: string;
+  image_url:string;
   category: string;
   description: string;
   price: string;
@@ -74,12 +75,59 @@ function Home() {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
-const [sortBy, setSortBy] = useState<string>('');
-  
+  const [sortBy, setSortBy] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [userData, setUserData] = useState({
+    username: '',
+    email: '',
+    phone_number: '',
+    address: '',
+    medicine: selectedMedicine?.name || ''
+  });
+    
 
 
 
   const [showMap, setShowMap] = useState(false);
+
+
+const handlePayment = async () => {
+  if (!selectedMedicine) return;
+  
+  setIsProcessingPayment(true);
+  
+  try {
+    const payload = {
+      ...userData,
+      medicine: selectedMedicine.name
+    };
+    
+    const response = await fetch('https://smart-pharma-net.vercel.app/exchange/user_purchase/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Payment failed');
+    }
+    
+    const data = await response.json();
+    toast.success('Payment successful!');
+    setShowPaymentModal(false);
+  } catch (error) {
+    toast.error('Payment failed. Please try again.');
+    console.error('Payment error:', error);
+  } finally {
+    setIsProcessingPayment(false);
+  }
+};
+
+
+
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -614,7 +662,6 @@ const [sortBy, setSortBy] = useState<string>('');
       
       const data: Medicine[] = await response.json();
 
-      // إذا كان موقع المستخدم متاحاً، احسب المسافات
       if (userLocation) {
         const medicinesWithDistance = data.map(medicine => ({
           ...medicine,
@@ -1044,97 +1091,122 @@ const sortedMedicines = [...filteredMedicines].sort((a, b) => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {currentMedicines.map((medicine, index) => (
+             {currentMedicines.map((medicine, index) => (
   <motion.div
     key={medicine.id}
-    className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow cursor-pointer"
+    className="bg-white rounded-xl shadow-sm hover:shadow-md overflow-hidden border border-gray-100 hover:border-indigo-100 transition-all cursor-pointer flex flex-col h-full"
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.3, delay: index * 0.05 }}
+    transition={{ duration: 0.4, delay: index * 0.05, ease: "easeOut" }}
     whileHover={{ 
       y: -5,
-      boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.2)"
+      boxShadow: "0 10px 20px -5px rgba(79, 70, 229, 0.1)",
+      borderColor: "rgba(79, 70, 229, 0.2)"
     }}
-    onClick={() => openModal(medicine)}
   >
-    {/* قسم أيقونة الدواء */}
-    <div className="bg-indigo-50 h-40 flex items-center justify-center relative overflow-hidden">
-      <motion.div
-        className="relative w-24 h-32"
-        initial={{ scale: 0.9 }}
-        animate={{ scale: 1 }}
-        transition={{ 
-          delay: index * 0.1 + 0.3,
-          type: "spring",
-          stiffness: 300,
-          damping: 10
-        }}
-        whileHover={{
-          rotate: [0, -2, 2, -2, 0], // اهتزاز خفيف
-          transition: { duration: 0.5 }
-        }}
-      >
-        {/* زجاجة الدواء */}
-        <FaPrescriptionBottleAlt className="absolute inset-0 text-6xl text-indigo-400/80" />
-        
-        {/* اسم الدواء داخل الزجاجة */}
-        <div className="absolute inset-0 flex items-center justify-center pt-8">
-          <motion.span 
-            className="text-indigo-800 font-bold text-sm text-center px-2 line-clamp-2"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: index * 0.1 + 0.5 }}
-          >
-            {medicine.name.split(' ').slice(0, 3).join(' ')}
-          </motion.span>
-        </div>
-        
-        {/* تأثير سائل داخل الزجاجة */}
-        <motion.div
-          className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-16 bg-indigo-100 rounded-t-full opacity-30"
-          initial={{ height: 0 }}
-          animate={{ height: 16 }}
-          transition={{ delay: index * 0.1 + 0.4 }}
+    {/* Image Section */}
+    <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+      {medicine.image_url ? (
+        <motion.img
+          src={medicine.image_url}
+          alt={medicine.name}
+          className="absolute inset-0 w-full h-full object-cover p-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          whileHover={{ scale: 1.03 }}
         />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-indigo-300 text-5xl">
+          <FaPills />
+        </div>
+      )}
+      
+      {/* Category Badge */}
+      <motion.div 
+        className="absolute top-3 left-3 bg-indigo-600 text-white text-xs px-2.5 py-1 rounded-md shadow-sm font-medium"
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        {medicine.category}
       </motion.div>
       
-      {/* علامة التصنيف */}
-      <div className="absolute bottom-4 right-4 bg-indigo-800/90 text-white text-xs px-2 py-1 rounded-full shadow">
-        {medicine.category}
+      {/* Shopping Cart Button */}
+      <motion.button 
+        className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-indigo-600 p-2 rounded-full shadow-sm hover:bg-indigo-600 hover:text-white transition-all"
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedMedicine(medicine);
+          setShowPaymentModal(true);
+        }}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.4 }}
+        whileHover={{ scale: 1.1, backgroundColor: "#4f46e5", color: "#fff" }}
+        whileTap={{ scale: 0.9 }}
+      >
+        <FaShoppingCart className="text-base" />
+      </motion.button>
+    </div>
+    
+    {/* Content Section */}
+    <div className="p-4 flex-grow flex flex-col">
+      <motion.h3 
+        className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 leading-tight"
+        whileHover={{ color: "#4f46e5" }}
+        transition={{ duration: 0.15 }}
+      >
+        {medicine.name}
+      </motion.h3>
+      
+      <div className="space-y-2.5 text-gray-600 text-sm mb-4">
+        <div className="flex items-start">
+          <FaBox className="mt-0.5 mr-2 text-indigo-400 text-xs flex-shrink-0" />
+          <span className="text-gray-700">Stock: <span className="font-medium">{medicine.quantity} units</span></span>
+        </div>
+        <div className="flex items-start">
+          <FaCalendarAlt className="mt-0.5 mr-2 text-indigo-400 text-xs flex-shrink-0" />
+          <span className="text-gray-700">Expiry: <span className="font-medium">{medicine.exp_date}</span></span>
+        </div>
+        {medicine.distance !== undefined && (
+          <div className="flex items-start">
+            <FaMapMarkerAlt className="mt-0.5 mr-2 text-indigo-400 text-xs flex-shrink-0" />
+            <span className="text-gray-700">Distance: <span className="font-medium">{medicine.distance.toFixed(1)} km</span></span>
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-auto flex justify-between items-center pt-3 border-t border-gray-100">
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          transition={{ duration: 0.2 }}
+        >
+          <span className="text-lg font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full">
+            ${medicine.price}
+          </span>
+        </motion.div>
+        
+        <motion.button 
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            openModal(medicine);
+          }}
+          whileHover={{ 
+            scale: 1.05,
+            backgroundColor: "#4338ca"
+          }}
+          whileTap={{ scale: 0.95 }}
+          transition={{ duration: 0.2 }}
+        >
+          <FaInfoCircle />
+          <span>Details</span>
+        </motion.button>
       </div>
     </div>
-                    
-                    <div className="p-5">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="text-lg font-bold text-gray-800 line-clamp-2">{medicine.name}</h3>
-                        <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-sm">
-                          ${medicine.price}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-2 text-gray-600 text-sm">
-                        <div className="flex items-center">
-                          <FaBox className="mr-2 text-indigo-500" />
-                          <span>Stock: {medicine.quantity} units</span>
-                        </div>
-                        <div className="flex items-center">
-                          <FaCalendarAlt className="mr-2 text-indigo-500" />
-                          <span>Exp: {medicine.exp_date}</span>
-                        </div>
-                        {medicine.distance !== undefined && (
-                          <div className="flex items-center">
-                            <FaMapMarkerAlt className="mr-2 text-indigo-500" />
-                            <span>{medicine.distance.toFixed(1)} km away</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <button className="mt-4 w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-800 py-2 rounded-lg transition-colors text-sm font-medium">
-                        View Details
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
+  </motion.div>
+))}
               </div>
               
               {/* عناصر التصفح */}
@@ -1545,6 +1617,135 @@ const sortedMedicines = [...filteredMedicines].sort((a, b) => {
             >
               <FaTimes className="flex-shrink-0 text-sm sm:text-base" />
               <span className="text-sm sm:text-base">Close Details</span>
+            </button>
+             
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
+<AnimatePresence>
+  {showPaymentModal && (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* طبقة الخلفية */}
+      <motion.div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={() => setShowPaymentModal(false)}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      
+      {/* النافذة الرئيسية */}
+      <motion.div
+        className="relative bg-white rounded-xl md:rounded-2xl shadow-xl md:shadow-2xl w-full max-w-md max-h-[95vh] overflow-hidden z-10 flex flex-col"
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      >
+        {/* رأس النافذة */}
+        <div className="sticky top-0 p-3 sm:p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-green-600 to-green-500 text-white z-10">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <FaDollarSign className="text-lg sm:text-xl" />
+            <h2 className="text-lg sm:text-xl font-bold">Complete Your Purchase</h2>
+          </div>
+          <button
+            onClick={() => setShowPaymentModal(false)}
+            className="text-white hover:text-gray-200 p-1 rounded-full hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+            aria-label="Close"
+          >
+            <FaTimes className="text-base sm:text-lg" />
+          </button>
+        </div>
+        
+        {/* محتوى النموذج */}
+        <div className="p-4 sm:p-6 space-y-4">
+          <div className="bg-green-50 p-4 rounded-lg mb-4">
+            <h3 className="font-semibold text-green-800 mb-2">Order Summary</h3>
+            <p className="text-gray-700">
+              <span className="font-medium">Medicine:</span> {selectedMedicine?.name}
+            </p>
+            <p className="text-gray-700">
+              <span className="font-medium">Price:</span> ${selectedMedicine?.price}
+            </p>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="Your full name"
+                value={userData.username}
+                onChange={(e) => setUserData({...userData, username: e.target.value})}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="your@email.com"
+                value={userData.email}
+                onChange={(e) => setUserData({...userData, email: e.target.value})}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+              <input
+                type="tel"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="+1234567890"
+                value={userData.phone_number}
+                onChange={(e) => setUserData({...userData, phone_number: e.target.value})}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <textarea
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="Your shipping address"
+                rows={3}
+                value={userData.address}
+                onChange={(e) => setUserData({...userData, address: e.target.value})}
+              />
+            </div>
+          </div>
+        </div>
+        
+        {/* أزرار الإجراءات */}
+        <div className="sticky bottom-0 bg-white pt-3 pb-3 px-4 sm:px-6 border-t border-gray-200">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <button 
+              onClick={() => setShowPaymentModal(false)}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-3 rounded-lg transition-all flex items-center justify-center"
+            >
+              <FaTimes className="mr-2" />
+              Cancel
+            </button>
+            <button 
+              onClick={handlePayment}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg transition-all flex items-center justify-center"
+              disabled={isProcessingPayment}
+            >
+              {isProcessingPayment ? (
+                <FaSpinner className="animate-spin mr-2" />
+              ) : (
+                <FaDollarSign className="mr-2" />
+              )}
+              Confirm Payment
             </button>
           </div>
         </div>

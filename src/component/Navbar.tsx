@@ -9,6 +9,8 @@ const Navbar: React.FC = () => {
   const [Email, setEmail] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [adminPharmacies, setAdminPharmacies] = useState<any[]>([]);
+  const [loadingPharmacies, setLoadingPharmacies] = useState<boolean>(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +67,43 @@ const Navbar: React.FC = () => {
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  const fetchAdminPharmacies = async () => {
+    try {
+      setLoadingPharmacies(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No token available');
+      }
+
+      const response = await fetch('https://smart-pharma-net.vercel.app/account/pharmacy/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch pharmacies');
+      }
+
+      const data = await response.json();
+      setAdminPharmacies(data);
+    } catch (error) {
+      console.error('Error fetching pharmacies:', error);
+      toast.error('Failed to load pharmacies');
+    } finally {
+      setLoadingPharmacies(false);
+    }
+  };
+
+  const handleProfileClick = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+    if (!isDropdownOpen) {
+      fetchAdminPharmacies();
+    }
   };
 
   const handleLogout = async () => {
@@ -173,7 +212,6 @@ const Navbar: React.FC = () => {
     };
   }, []);
 
-
   const performLogout = async () => {
     try {
       const refreshTokenValue = localStorage.getItem('refreshToken');
@@ -210,9 +248,12 @@ const Navbar: React.FC = () => {
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('Email');
       localStorage.removeItem('pharmacyName');
+      localStorage.removeItem('pharmacy_id');
+
 
       setIsMenuOpen(false);
       setIsLoggedIn(false);
+      setAdminPharmacies([]);
       toast.success('Logged out successfully!');
       navigate('/signin');
     } catch (err: any) {
@@ -225,9 +266,10 @@ const Navbar: React.FC = () => {
     if (!name) return '';
     return name.slice(0, 2).toUpperCase();
   };
-   const handlePricingClick = (e: React.MouseEvent) => {
-    const accessToken = localStorage.getItem('accessToken');
-    if (!accessToken) {
+
+  const handlePricingClick = (e: React.MouseEvent) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
       e.preventDefault();
       navigate('/pharmacy-login');
     }
@@ -277,12 +319,12 @@ const Navbar: React.FC = () => {
             </li>
             <li>
               <NavLink
-          to="/pricing"
-          className={({ isActive }) => `text-sm ${isActive ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-500'} transition duration-200`}
-          onClick={handlePricingClick}
-        >
-          Pricing
-        </NavLink>
+                to="/pricing"
+                className={({ isActive }) => `text-sm ${isActive ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-500'} transition duration-200`}
+                onClick={handlePricingClick}
+              >
+                Pricing
+              </NavLink>
             </li>
             <li className="text-gray-300">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" className="w-4 h-4 current-fill" viewBox="0 0 24 24">
@@ -320,20 +362,75 @@ const Navbar: React.FC = () => {
               </Link>
               <div
                 className="flex w-12 h-12 items-center justify-center bg-indigo-600 text-white rounded-full hover:bg-indigo-700 hover:shadow-lg active:scale-95 transition-all duration-200 cursor-pointer shadow-md"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                onClick={handleProfileClick}
               >
                 <span className="text-lg font-semibold">
                   {getInitials(Email)}
                 </span>
               </div>
               {isDropdownOpen && (
-                <div className="absolute top-14 right-0 bg-white border border-gray-200 rounded-lg shadow-lg animate-fadeIn">
-                  <button
-                    className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-all duration-200"
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </button>
+                <div className="absolute top-14 right-0 bg-white border border-gray-200 rounded-lg shadow-lg animate-fadeIn w-64">
+                  {loadingPharmacies ? (
+                    <div className="p-4 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
+                      <p className="text-sm text-gray-600 mt-2">Loading pharmacies...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {adminPharmacies.length > 0 ? (
+                        <div className="max-h-60 overflow-y-auto">
+                          <div className="px-4 py-2 border-b border-gray-200">
+                            <h3 className="text-sm font-medium text-gray-700">Your Pharmacies</h3>
+                          </div>
+                          {adminPharmacies.map((pharmacy) => (
+                          <Link
+                              key={pharmacy.id}
+                              to="/medicine"
+                              className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all duration-200 border-b border-gray-100 last:border-b-0"
+                              onClick={() => {
+                                localStorage.setItem("pharmacy_id", pharmacy.id.toString());
+                                localStorage.setItem("pharmacyName", pharmacy.name);
+                                setIsDropdownOpen(false);
+                                navigate("/medicine", { 
+                                  state: { 
+                                    pharmacyName: pharmacy.name,
+                                    pharmacyId: pharmacy.id 
+                                  } 
+                                });
+                              }}
+                            >
+                              <div className="flex items-center">
+                                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-2">
+                                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                  </svg>
+                                </div>
+                                <div>
+                                  <p className="font-medium">{pharmacy.name}</p>
+                                  <p className="text-xs text-gray-500">{pharmacy.address}</p>
+                                </div>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center">
+                          <p className="text-sm text-gray-600">No pharmacies found</p>
+                        </div>
+                      )}
+                      <button
+                        className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-all duration-200 border-t border-gray-200"
+                        onClick={handleLogout}
+                      >
+                        <div className="flex items-center justify-center">
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                          </svg>
+                          Logout
+                        </div>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -381,11 +478,7 @@ const Navbar: React.FC = () => {
           <div className="mt-6">
             {isLoggedIn && (
               <div className="mb-8 flex items-center space-x-4 p-4 bg-indigo-50 rounded-lg">
-                <div className="flex w-12 h-12 items-center justify-center bg-indigo-600 text-white rounded-full shadow-md border-2 border-indigo-700">
-                  <span className="text-lg font-semibold">
-                    {getInitials(Email)}
-                  </span>
-                </div>
+                
                 <div>
                   <p className="font-medium text-indigo-800">{Email}</p>
                   <Link 
@@ -421,25 +514,25 @@ const Navbar: React.FC = () => {
                 </NavLink>
               </li>
               <li>
-              <NavLink
-          to="/pricing"
-          className={({ isActive }) =>
-            `block p-4 text-sm font-semibold ${
-              isActive 
-                ? 'text-indigo-600 bg-indigo-50 border-l-4 border-indigo-600' 
-                : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 border-l-4 border-transparent'
-            } rounded-lg transition-all duration-200 flex items-center`
-          }
-          onClick={(e) => {
-            handlePricingClick(e);
-            toggleMenu();
-          }}
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          Pricing
-        </NavLink>
+                <NavLink
+                  to="/pricing"
+                  className={({ isActive }) =>
+                    `block p-4 text-sm font-semibold ${
+                      isActive 
+                        ? 'text-indigo-600 bg-indigo-50 border-l-4 border-indigo-600' 
+                        : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 border-l-4 border-transparent'
+                    } rounded-lg transition-all duration-200 flex items-center`
+                  }
+                  onClick={(e) => {
+                    handlePricingClick(e);
+                    toggleMenu();
+                  }}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Pricing
+                </NavLink>
               </li>
               <li>
                 <NavLink

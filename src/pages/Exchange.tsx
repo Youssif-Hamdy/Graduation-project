@@ -100,51 +100,70 @@ const Exchange: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const fetchMedicines = async (): Promise<void> => {
-    const token = localStorage.getItem('accessToken');
-    
-    if (!token) {
-      setError('Authentication required - Please login first');
-      setLoading(false);
-      toast.error('You need to login first');
+ const fetchMedicines = async (): Promise<void> => {
+  const ownerToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('accessToken');
+
+  let token = '';
+  let apiUrl = '';
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem('pharmacy_id');
+    if (!pharmacyId) {
+      setError('Pharmacy ID not found');
+      toast.error('Pharmacy ID missing');
       navigate('/pharmacy-login');
       return;
     }
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/exchange_list/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = 'https://smart-pharma-net.vercel.app/exchange/exchange_list/';
+    token = userToken;
+  } else {
+    setError('Authentication required - Please login first');
+    setLoading(false);
+    toast.error('You need to login first');
+    navigate('/pharmacy-login');
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const response = await fetch('https://smart-pharma-net.vercel.app/exchange/exchange_list/', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  setLoading(true);
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Token might be expired, try to refresh
-          const refreshed = await refreshToken();
-          if (refreshed) {
-            // Retry with new token
-            const newToken = localStorage.getItem('accessToken');
-            const retryResponse = await fetch('https://smart-pharma-net.vercel.app/exchange/exchange_list/', {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json',
-              },
-            });
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-            if (!retryResponse.ok) {
-              throw new Error(`HTTP error! status: ${retryResponse.status}`);
-            }
+    if (!response.ok) {
+      if (response.status === 401 && userToken) {
+        const refreshed = await refreshToken();
+        if (refreshed) {
+          const newToken = localStorage.getItem('accessToken');
+          const retryResponse = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
 
-            const data: Medicine[] = await retryResponse.json();
-            const dataWithIds = data.map((item, index) => ({
-              ...item,
-              id: `${item.medicine_name}-${index}-${Date.now()}`
-            }));
+          if (!retryResponse.ok) {
+            throw new Error(`HTTP error! status: ${retryResponse.status}`);
+          }
+
+         const data: Medicine[] = await retryResponse.json();
+            // Filter out medicines with quantity 0 before setting state
+            const dataWithIds = data
+              .filter(item => parseInt(item.medicine_quantity_to_sell) > 0)
+              .map((item, index) => ({
+                ...item,
+                id: `${item.medicine_name}-${index}-${Date.now()}`
+              }));
             setMedicines(dataWithIds);
             setError(null);
             return;
@@ -153,11 +172,14 @@ const Exchange: React.FC = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data: Medicine[] = await response.json();
-      const dataWithIds = data.map((item, index) => ({
-        ...item,
-        id: `${item.medicine_name}-${index}-${Date.now()}`
-      }));
+  const data: Medicine[] = await response.json();
+      // Filter out medicines with quantity 0 before setting state
+      const dataWithIds = data
+        .filter(item => parseInt(item.medicine_quantity_to_sell) > 0)
+        .map((item, index) => ({
+          ...item,
+          id: `${item.medicine_name}-${index}-${Date.now()}`
+        }));
       setMedicines(dataWithIds);
       setError(null);
     } catch (err) {
@@ -169,6 +191,7 @@ const Exchange: React.FC = () => {
     }
   };
 
+
   useEffect(() => {
     fetchMedicines();
   }, []);    
@@ -179,52 +202,7 @@ const Exchange: React.FC = () => {
 
 
 
-  useEffect(() => {
-    const fetchMedicines = async () => {
-      const token = localStorage.getItem('accessToken');
-      
-      if (!token) {
-        setError('Authentication required - Please login first');
-        setLoading(false);
-        toast.error('You need to login first');
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const response = await fetch('https://smart-pharma-net.vercel.app/exchange/exchange_list/', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error('Session expired - Please login again');
-          }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data: Medicine[] = await response.json();
-        const dataWithIds = data.map((item, index) => ({
-          ...item,
-          id: `${item.medicine_name}-${index}-${Date.now()}`
-        }));
-        setMedicines(dataWithIds);
-        setError(null);
-      } catch (err) {
-        const error = err as Error;
-        setError(error.message);
-        toast.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMedicines();
-  }, []);
+ 
  const handleBuyClick = (medicine: Medicine) => {
     setSelectedMedicineForBuy(medicine);
     setSelectedMedicineForDetails(null);
@@ -236,27 +214,49 @@ const Exchange: React.FC = () => {
 
 const handleBuyOrder = async () => {
   if (!selectedMedicineForBuy) return;
-    const pharmacyBuyer = localStorage.getItem('pharmacyName') || 'Unknown Buyer';
 
+  const pharmacyBuyer = localStorage.getItem('pharmacyName') || 'Unknown Buyer';
+  const quantityNumber = parseInt(quantity.toString(), 10);
+  const totalPrice = parseFloat(selectedMedicineForBuy.medicine_price_to_sell) * quantityNumber;
 
- const orderData = {
-  medicine_name: selectedMedicineForBuy.medicine_name,
-  price: selectedMedicineForBuy.medicine_price_to_sell,
-  quantity: quantity,
-  pharmacy_seller: selectedMedicineForBuy.pharmacy_name,
-  pharmacy_buyer: pharmacyBuyer, 
-
-  status: "Pending"
-};
-
+  const orderData = {
+    medicine_name: selectedMedicineForBuy.medicine_name,
+    price: totalPrice.toString(),
+    quantity: quantityNumber,
+    pharmacy_seller: selectedMedicineForBuy.pharmacy_name,
+    pharmacy_buyer: pharmacyBuyer,
+    status: "Pending",
+  };
 
   console.log("Order Data Being Sent:", orderData);
 
+  const ownerToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('accessToken');
+
+  let token = '';
+  let apiUrl = '';
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem('pharmacy_id');
+    if (!pharmacyId) {
+      toast.error('Pharmacy ID not found.');
+      return;
+    }
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/buy/order/pharmacy/${pharmacyId}/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = 'https://smart-pharma-net.vercel.app/exchange/buy/order';
+    token = userToken;
+  } else {
+    toast.error('You need to log in first.');
+    return;
+  }
+
   try {
-    const response = await fetch('https://smart-pharma-net.vercel.app/exchange/buy/order', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(orderData)
@@ -274,9 +274,11 @@ const handleBuyOrder = async () => {
       error: error,
       requestData: orderData
     });
+    // @ts-ignore
     toast.error(error.message || "An error occurred while trying to complete the purchase");
   }
 };
+
 
 
   const filteredMedicines = medicines.filter(medicine =>

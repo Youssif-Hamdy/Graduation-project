@@ -83,40 +83,56 @@ const OrdersDashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
-  const fetchOrders = async () => {
-    try {
-      const accessToken = localStorage.getItem('accessToken');
-      
-      if (!accessToken) {
-        throw new Error('Authentication required. Please login again.');
-      }
+const fetchOrders = async () => {
+  const ownerToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('accessToken');
 
-      const response = await fetch(
-        'https://smart-pharma-net.vercel.app/exchange/get/pharmcy_seller/orders',
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-        }
-      );
+  let token = '';
+  let apiUrl = '';
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch orders: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setOrders(data);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error occurred');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem('pharmacy_id');
+    if (!pharmacyId) {
+      setError('Pharmacy ID not found.');
+      toast.error('Pharmacy ID missing');
+      return;
     }
-  };
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/get/pharmcy_seller/orders/${pharmacyId}/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/get/pharmcy_seller/orders`;
+    token = userToken;
+  } else {
+    setError('Authentication required. Please login again.');
+    toast.error('You need to login first');
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch orders: ${response.status}`);
+    }
+
+    const data = await response.json();
+    setOrders(data);
+    setError(null);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Network error occurred');
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
+
 
   const confirmComplete = (id: number) => {
     toast.info(
@@ -151,57 +167,84 @@ const OrdersDashboard: React.FC = () => {
     );
   };
 
-  const updateOrderStatus = async (id: number, newStatus: 'Pending' | 'Completed' | 'Cancelled') => {
-    try {
-      setUpdatingId(id);
-      const accessToken = localStorage.getItem('accessToken');
-      
-      if (!accessToken) {
-        throw new Error('Authentication required');
-      }
+const updateOrderStatus = async (
+  id: number,
+  newStatus: 'Pending' | 'Completed' | 'Cancelled'
+) => {
+  try {
+    setUpdatingId(id);
 
-      const response = await fetch(
-        `https://smart-pharma-net.vercel.app/exchange/update_status/${id}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            status: newStatus
-          })
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to update status: ${response.status}`);
-      }
-
-      // Optimistic UI update
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order.id === id ? { ...order, status: newStatus } : order
-        )
-      );
-
-      if (newStatus === 'Completed') {
-        toast.success(`Order #${id} marked as completed successfully!`, {
-          position: "top-right",
-          autoClose: 3000,
-        });
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update status');
-      toast.error(`Failed to update order status: ${err instanceof Error ? err.message : 'Unknown error'}`, {
-        position: "top-right",
-        autoClose: 3000,
-      });
-    } finally {
-      setUpdatingId(null);
+    // الحصول على التوكن - تم تبسيط العملية
+    const token = localStorage.getItem('token') 
+    if (!token) {
+      throw new Error('Authentication token not found');
     }
-  };
+
+    console.log('Using token:', token); // لأغراض debugging
+
+    const response = await fetch(
+      `https://smart-pharma-net.vercel.app/exchange/update_status/${id}/`, // إضافة slash في النهاية
+      {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      }
+    );
+
+    console.log('Response status:', response.status); // لأغراض debugging
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error("API Error Details:", errorData);
+      } catch (e) {
+        console.error("Failed to parse error response");
+      }
+      
+      throw new Error(
+        errorData?.detail || 
+        errorData?.message || 
+        `Failed to update status: ${response.status} ${response.statusText}`
+      );
+    }
+
+    // قراءة البيانات فقط إذا كان هناك محتوى
+    const data = response.status !== 204 ? await response.json() : null;
+    console.log('Update successful, response:', data);
+
+    // تحديث الواجهة
+    setOrders(prevOrders =>
+      prevOrders.map(order =>
+        order.id === id ? { ...order, status: newStatus } : order
+      )
+    );
+
+    toast.success(`Order #${id} status updated to ${newStatus} successfully!`, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to update status';
+    console.error("Update error:", errorMessage);
+    
+    setError(errorMessage);
+    toast.error(`Failed to update order status: ${errorMessage}`, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+    
+  } finally {
+    setUpdatingId(null);
+  }
+};
 
   useEffect(() => {
     fetchOrders();
@@ -317,7 +360,7 @@ const OrdersDashboard: React.FC = () => {
           opacity: 1,
           transition: { duration: 0.5, ease: "easeOut" }
         }}
-        className="p-4 md:p-8 max-w-7xl mx-auto "
+        className="p-4 md:p-8 max-w-7xl mx-auto  "
       >
         {/* Header */}
         <motion.header
@@ -331,7 +374,7 @@ const OrdersDashboard: React.FC = () => {
               damping: 20
             }
           }}
-          className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pt"
+          className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pt-20"
         >
           <div>
             <motion.h1 

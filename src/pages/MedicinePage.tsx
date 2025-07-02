@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 // @ts-ignore
-
 import { FaPlus, FaEdit, FaTrash, FaSignOutAlt, FaSearch, FaPills, FaTags, FaShieldAlt, FaShippingFast, FaExchangeAlt, FaRetweet, FaRegCalendarAlt, FaBoxOpen, FaClinicMedical, FaRegClock, FaPercentage } from "react-icons/fa";
 import { useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -21,6 +20,8 @@ interface Medicine {
   can_be_sell: boolean;
   quantity_to_sell: number;
   price_sell: string;
+  image_url: string; 
+
 }
 
 const MedicinePage: React.FC = () => {
@@ -58,20 +59,23 @@ useEffect(() => {
    const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
 
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      toast.error("You need to login first.");
-      navigate("/pharmacy-login");
-      return;
-    } else {
-      fetchMedicines();
-    }
-  }, [navigate]);
+useEffect(() => {
+  const ownerToken = localStorage.getItem("token");
+  const userToken = localStorage.getItem("accessToken");
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [medicines]);
+  if (!ownerToken && !userToken) {
+    toast.error("You need to login first.");
+    navigate("/pharmacy-login");
+    return;
+  }
+
+  fetchMedicines();
+}, [navigate]);
+
+useEffect(() => {
+  setCurrentPage(1);
+}, [medicines]);
+
 
   const refreshToken = async (): Promise<void> => {
     const refreshToken = localStorage.getItem("refreshToken");
@@ -110,57 +114,80 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, []);
 
-  const fetchMedicines = async (): Promise<void> => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      toast.error("You need to log in first.");
-      navigate("/pharmacy-login");
+ const fetchMedicines = async (): Promise<void> => {
+  const ownerToken = localStorage.getItem("token");
+  const userToken = localStorage.getItem("accessToken");
+
+  let apiUrl = "";
+  let token = "";
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem("pharmacy_id");
+    if (!pharmacyId) {
+      toast.error("Pharmacy ID not found.");
       return;
     }
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/owner/pharmacies/${pharmacyId}/medicines/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = "https://smart-pharma-net.vercel.app/medicine/medicines/";
+    token = userToken;
+  } else {
+    toast.error("You need to log in first.");
+    navigate("/pharmacy-login");
+    return;
+  }
 
-    try {
-      const response = await fetch("https://smart-pharma-net.vercel.app/medicine/medicines/", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+  try {
+    const response = await fetch(apiUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
 
-      if (!response.ok) {
-        const errorResponse = await response.json();
-        if (errorResponse.code === "token_not_valid") {
-          await refreshToken();
-          const newToken = localStorage.getItem("accessToken");
-          if (!newToken) {
-            toast.error("Failed to refresh token. Please log in again.");
-            navigate("/pharmacy-login");
-            return;
-          }
-          const retryResponse = await fetch("https://smartpharmanet-production.up.railway.app/medicine/medicines/", {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${newToken}`,
-              "Content-Type": "application/json",
-            },
-          });
-          if (!retryResponse.ok) {
-            throw new Error(`Failed to fetch medicines after token refresh. Status: ${retryResponse.status}`);
-          }
-          const data: Medicine[] = await retryResponse.json();
-          setMedicines(data);
-        } else {
-          throw new Error(`Failed to fetch medicines. Status: ${response.status}`);
+    if (!response.ok) {
+      const errorResponse = await response.json();
+
+      if (errorResponse.code === "token_not_valid" && !ownerToken) {
+        // فقط جرّب تعمل refresh لو كنا بنستخدم accessToken مش token
+        await refreshToken();
+        const newToken = localStorage.getItem("accessToken");
+
+        if (!newToken) {
+          toast.error("Failed to refresh token. Please log in again.");
+          navigate("/pharmacy-login");
+          return;
         }
-      } else {
-        const data: Medicine[] = await response.json();
+
+        const retryResponse = await fetch(apiUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${newToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!retryResponse.ok) {
+          throw new Error(`Failed to fetch medicines after token refresh. Status: ${retryResponse.status}`);
+        }
+
+        const data: Medicine[] = await retryResponse.json();
         setMedicines(data);
+      } else {
+        throw new Error(`Failed to fetch medicines. Status: ${response.status}`);
       }
-    } catch (error) {
-      console.error("Error fetching medicines:", error);
-      toast.error("Failed to fetch medicines. Please try again.");
+    } else {
+      const data: Medicine[] = await response.json();
+      setMedicines(data);
     }
-  };
+  } catch (error) {
+    console.error("Error fetching medicines:", error);
+    toast.error("Failed to fetch medicines. Please try again.");
+  }
+};
+
 
   useEffect(() => {
     fetchMedicines();
@@ -190,203 +217,277 @@ useEffect(() => {
     return true;
   };
 
-  const handleToggleCanBeSell = async (id: number, newValue: boolean): Promise<void> => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      toast.error("You need to log in first.");
+ const handleToggleCanBeSell = async (id: number, newValue: boolean): Promise<void> => {
+  const ownerToken = localStorage.getItem("token");
+  const userToken = localStorage.getItem("accessToken");
+
+  let token = "";
+  let apiUrl = "";
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem("pharmacy_id");
+    if (!pharmacyId) {
+      toast.error("Pharmacy ID not found.");
       return;
     }
-  
-    try {
-      const medicineToUpdate = medicines.find(med => med.id === id);
-      if (!medicineToUpdate) {
-        toast.error("Medicine not found");
-        return;
-      }
-  
-      const payload = {
-        ...medicineToUpdate,
-        can_be_sell: newValue,
-        quantity_to_sell: newValue ? (medicineToUpdate.quantity_to_sell || 1) : 0,
-        price_sell: newValue ? (medicineToUpdate.price_sell || medicineToUpdate.price) : "0",
-        price: parseFloat(medicineToUpdate.price),
-        quantity: parseInt(medicineToUpdate.quantity.toString(), 10),
-      };
-  // @ts-ignore
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/owner/pharmacies/${pharmacyId}/medicines/${id}/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`;
+    token = userToken;
+  } else {
+    toast.error("You need to log in first.");
+    return;
+  }
 
-      delete payload.id;
-  
-      const response = await fetch(`https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("API Error Details:", errorData);
-        
-        // عرض رسالة الخطأ بشكل أكثر وضوحاً
-        if (errorData.quantity_to_sell) {
-          throw new Error(errorData.quantity_to_sell[0]);
-        }
-        throw new Error(errorData.message || "Failed to update medicine");
-      }
-  
-      const data: Medicine = await response.json();
-      
-      // تحديث الحالة المحلية
-      setMedicines(medicines.map(med => 
-        med.id === id ? { 
-          ...med, 
-          can_be_sell: data.can_be_sell,
-          quantity_to_sell: data.quantity_to_sell,
-          price_sell: data.price_sell
-        } : med
-      ));
-      
-      toast.success(`Medicine marked as ${newValue ? "can be sold" : "cannot be sold"}`);
-    } catch (error) {
-      console.error("Error updating medicine:", error);
-      // @ts-ignore
-
-      toast.error(error.message || "Failed to update medicine. Please try again.");
-      
-      setMedicines(medicines.map(med => 
-        med.id === id ? { ...med, can_be_sell: !newValue } : med
-      ));
+  try {
+    const medicineToUpdate = medicines.find(med => med.id === id);
+    if (!medicineToUpdate) {
+      toast.error("Medicine not found");
+      return;
     }
-  };
+
+    const payload = {
+      ...medicineToUpdate,
+      can_be_sell: newValue,
+      quantity_to_sell: newValue ? (medicineToUpdate.quantity_to_sell || 1) : 0,
+      price_sell: newValue ? (medicineToUpdate.price_sell || medicineToUpdate.price) : "0",
+      price: parseFloat(medicineToUpdate.price),
+      quantity: parseInt(medicineToUpdate.quantity.toString(), 10),
+    };
+
+    // إزالة الـ ID من الـ payload
+    // @ts-ignore
+    delete payload.id;
+
+    const response = await fetch(apiUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("API Error Details:", errorData);
+
+      if (errorData.quantity_to_sell) {
+        throw new Error(errorData.quantity_to_sell[0]);
+      }
+
+      throw new Error(errorData.message || "Failed to update medicine");
+    }
+
+    const data: Medicine = await response.json();
+
+    setMedicines(medicines.map(med =>
+      med.id === id ? {
+        ...med,
+        can_be_sell: data.can_be_sell,
+        quantity_to_sell: data.quantity_to_sell,
+        price_sell: data.price_sell
+      } : med
+    ));
+
+    toast.success(`Medicine marked as ${newValue ? "can be sold" : "cannot be sold"}`);
+  } catch (error) {
+    console.error("Error updating medicine:", error);
+    // @ts-ignore
+    toast.error(error.message || "Failed to update medicine. Please try again.");
+
+    // إعادة القيمة القديمة في حالة الفشل
+    setMedicines(medicines.map(med =>
+      med.id === id ? { ...med, can_be_sell: !newValue } : med
+    ));
+  }
+};
+
 
   const handleAddMedicine = async (): Promise<void> => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      toast.error("You need to log in first.");
+  const ownerToken = localStorage.getItem("token");
+  const userToken = localStorage.getItem("accessToken");
+
+  let apiUrl = "";
+  let token = "";
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem("pharmacy_id");
+    if (!pharmacyId) {
+      toast.error("Pharmacy ID not found.");
       return;
     }
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/owner/pharmacies/${pharmacyId}/medicines/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = "https://smart-pharma-net.vercel.app/medicine/medicines/";
+    token = userToken;
+  } else {
+    toast.error("You need to log in first.");
+    return;
+  }
 
-    if (!validateMedicine(newMedicine)) {
-      return;
-    }
+  if (!validateMedicine(newMedicine)) {
+    return;
+  }
 
-    const payload = {
-      name: newMedicine.name,
-      category: newMedicine.category,
-      description: newMedicine.description,
-      price: parseFloat(newMedicine.price),
-      quantity: parseInt(newMedicine.quantity.toString(), 10),
-      exp_date: newMedicine.exp_date,
-      can_be_sell: newMedicine.can_be_sell,
-      quantity_to_sell: parseInt(newMedicine.quantity_to_sell.toString(), 10),
-      price_sell: parseFloat(newMedicine.price_sell || "0"),
-    };
-
-    try {
-      const response = await fetch("https://smart-pharma-net.vercel.app/medicine/medicines/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorResponse = await response.json();
-        console.error("Error response from API:", errorResponse);
-        throw new Error(`Failed to add medicine. Status: ${response.status}`);
-      }
-
-      const data: Medicine = await response.json();
-      setMedicines([...medicines, data]);
-      toast.success("Medicine added successfully!");
-      setNewMedicine({
-        name: "",
-        category: "",
-        description: "",
-        price: "",
-        quantity: 0,
-        exp_date: "",
-        can_be_sell: true,
-        quantity_to_sell: 0,
-        price_sell: "",
-      });
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error("Error adding medicine:", error);
-      toast.error("Failed to add medicine. Please try again.");
-    }
+  const payload = {
+    name: newMedicine.name,
+    category: newMedicine.category,
+    description: newMedicine.description,
+    price: parseFloat(newMedicine.price),
+    quantity: parseInt(newMedicine.quantity.toString(), 10),
+    exp_date: newMedicine.exp_date,
+    can_be_sell: newMedicine.can_be_sell,
+    quantity_to_sell: parseInt(newMedicine.quantity_to_sell.toString(), 10),
+    price_sell: parseFloat(newMedicine.price_sell || "0"),
   };
 
-  const handleUpdateMedicine = async (id: number, updatedMedicine: Medicine): Promise<void> => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      toast.error("You need to log in first.");
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorResponse = await response.json();
+      console.error("Error response from API:", errorResponse);
+      throw new Error(`Failed to add medicine. Status: ${response.status}`);
+    }
+
+    const data: Medicine = await response.json();
+    setMedicines([...medicines, data]);
+    toast.success("Medicine added successfully!");
+
+    setNewMedicine({
+      name: "",
+      category: "",
+      description: "",
+      price: "",
+      quantity: 0,
+      exp_date: "",
+      can_be_sell: true,
+      quantity_to_sell: 0,
+      price_sell: "",
+    });
+    setIsModalOpen(false);
+  } catch (error) {
+    console.error("Error adding medicine:", error);
+    toast.error("Failed to add medicine. Please try again.");
+  }
+};
+
+
+ const handleUpdateMedicine = async (id: number, updatedMedicine: Medicine): Promise<void> => {
+  const ownerToken = localStorage.getItem("token");
+  const userToken = localStorage.getItem("accessToken");
+
+  let token = "";
+  let apiUrl = "";
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem("pharmacy_id");
+    if (!pharmacyId) {
+      toast.error("Pharmacy ID not found.");
       return;
     }
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/owner/pharmacies/${pharmacyId}/medicines/${id}/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`;
+    token = userToken;
+  } else {
+    toast.error("You need to log in first.");
+    return;
+  }
 
-    if (!validateMedicine(updatedMedicine)) {
-      return;
-    }
+  if (!validateMedicine(updatedMedicine)) {
+    return;
+  }
 
-    const payload = {
-      ...updatedMedicine,
-      price: parseFloat(updatedMedicine.price),
-      quantity: parseInt(updatedMedicine.quantity.toString(), 10),
-      quantity_to_sell: parseInt(updatedMedicine.quantity_to_sell.toString(), 10),
-      price_sell: parseFloat(updatedMedicine.price_sell || "0"),
-    };
-
-    try {
-      const response = await fetch(`https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to update medicine");
-      }
-      const data: Medicine = await response.json();
-      setMedicines(medicines.map(med => med.id === id ? data : med));
-      toast.success("Medicine updated successfully!");
-      setIsModalOpen(false);
-      setEditingMedicine(null);
-    } catch (error) {
-      console.error("Error updating medicine:", error);
-      toast.error("Failed to update medicine. Please try again.");
-    }
+  const payload = {
+    ...updatedMedicine,
+    price: parseFloat(updatedMedicine.price),
+    quantity: parseInt(updatedMedicine.quantity.toString(), 10),
+    quantity_to_sell: parseInt(updatedMedicine.quantity_to_sell.toString(), 10),
+    price_sell: parseFloat(updatedMedicine.price_sell || "0"),
   };
 
-  const handleDeleteMedicine = async (id: number): Promise<void> => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      toast.error("You need to log in first.");
+  try {
+    const response = await fetch(apiUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to update medicine");
+    }
+
+    const data: Medicine = await response.json();
+    setMedicines(medicines.map(med => med.id === id ? data : med));
+    toast.success("Medicine updated successfully!");
+    setIsModalOpen(false);
+    setEditingMedicine(null);
+  } catch (error) {
+    console.error("Error updating medicine:", error);
+    toast.error("Failed to update medicine. Please try again.");
+  }
+};
+
+
+ const handleDeleteMedicine = async (id: number): Promise<void> => {
+  const ownerToken = localStorage.getItem("token");
+  const userToken = localStorage.getItem("accessToken");
+
+  let apiUrl = "";
+  let token = "";
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem("pharmacy_id");
+    if (!pharmacyId) {
+      toast.error("Pharmacy ID not found.");
       return;
     }
-    try {
-      const response = await fetch(`https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Failed to delete medicine");
-      }
-      setMedicines(medicines.filter(med => med.id !== id));
-      toast.success("Medicine deleted successfully!");
-    } catch (error) {
-      console.error("Error deleting medicine:", error);
-      toast.error("Failed to delete medicine. Please try again.");
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/owner/pharmacies/${pharmacyId}/medicines/${id}/`;
+    token = ownerToken;
+  } else if (userToken) {
+    apiUrl = `https://smart-pharma-net.vercel.app/medicine/medicines/${id}/`;
+    token = userToken;
+  } else {
+    toast.error("You need to log in first.");
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete medicine");
     }
-  };
+
+    setMedicines(medicines.filter(med => med.id !== id));
+    toast.success("Medicine deleted successfully!");
+  } catch (error) {
+    console.error("Error deleting medicine:", error);
+    toast.error("Failed to delete medicine. Please try again.");
+  }
+};
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     const { name, value } = e.target;
@@ -409,56 +510,53 @@ useEffect(() => {
   };
 
   const performLogout = async () => {
-    try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      const accessToken = localStorage.getItem('accessToken');
-      console.log('Refresh Token:', refreshToken);
-      console.log('Access Token:', accessToken);
-  
-      if (!refreshToken || !accessToken) {
-        throw new Error('No tokens found');
-      }
-  
-      const response = await fetch('https://smart-pharma-net.vercel.app/account/logout/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ refresh: refreshToken }),
-      });
-  
-      const data = await response.json();
-      console.log("Logout response:", data);
-  
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to log out');
-      }
-  
-      localStorage.removeItem('accessToken');
-      setIsLoggedIn(false);
-      toast.success('Logged out successfully!');
-      navigate('/pharmacy-login');
-    } catch (err: any) {
-      console.error('Logout error:', err);
-      toast.error(err.message || 'An error occurred during logout. Please try again.');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      navigate('/pharmacy-login');
-    }
-  };
+  const accessToken = localStorage.getItem("accessToken");
 
-  const getRandomMedicineImage = () => {
-    const medicineImages = [
-      "https://img.freepik.com/free-photo/medicine-capsules-global-health-with-geometric-pattern-digital-remix_53876-126473.jpg",
-      "https://img.freepik.com/free-photo/pills-jar_23-2148747350.jpg",
-      "https://img.freepik.com/free-photo/medicine-capsules-tablets-blue-background_23-2148122428.jpg",
-      "https://img.freepik.com/free-photo/arrangement-with-different-pills_23-2148905589.jpg",
-      "https://img.freepik.com/free-photo/medicine-capsules_23-2148888248.jpg",
-      "https://img.freepik.com/free-photo/vitamin-b-complex-capsules-isolated-white-background_93675-129677.jpg"
-    ];
-    return medicineImages[Math.floor(Math.random() * medicineImages.length)];
-  };
+  if (!accessToken) {
+    navigate("/availablemedicine");
+    return;
+  }
+
+  try {
+    const refreshToken = localStorage.getItem("refreshToken");
+    console.log("Access Token:", accessToken);
+
+    if (!refreshToken) {
+      throw new Error("No refresh token found");
+    }
+
+    const response = await fetch("https://smart-pharma-net.vercel.app/account/logout/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    const data = await response.json();
+    console.log("Logout response:", data);
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to log out");
+    }
+
+    setIsLoggedIn(false);
+    localStorage.removeItem("accessToken");
+    toast.success("Logged out successfully!");
+    navigate("/pharmacy-login");
+  } catch (err: any) {
+    console.error("Logout error:", err);
+    toast.error(err.message || "An error occurred during logout. Please try again.");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("pharmacy_id");
+
+    navigate("/pharmacy-login");
+  }
+};
+
+
+  
     const filteredMedicines = medicines.filter(medicine => {
     const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          medicine.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -702,123 +800,128 @@ useEffect(() => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {currentItems.map((medicine, index) => (
-                  <motion.div
-                    key={medicine.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 * index, duration: 0.3 }}
-                    whileHover={{ scale: 1.02, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)" }}
-                    className="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col"
-                    style={{ minHeight: '420px' }}
-                  >
-                    {/* Medicine Image */}
-                    <div className="relative h-40 bg-gray-100 overflow-hidden">
-                      <img
-                        src={medicine.imageUrl || "https://www.creativefabrica.com/wp-content/uploads/2020/07/17/Medicine-Logo-Graphics-4647232-1-1-580x386.jpg"}
-                        alt={medicine.name}
-                        className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                      />
-                      {medicine.exp_date && new Date(medicine.exp_date) < new Date() && (
-                        <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-sm">
-                          Expired
-                        </span>
-                      )}
-                      {medicine.quantity < 10 && (
-                        <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full shadow-sm">
-                          Low Stock
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Medicine Content */}
-                    <div className="p-4 flex flex-col flex-grow">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="text-lg font-semibold text-gray-800 line-clamp-1">{medicine.name}</h3>
-                        <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full whitespace-nowrap">
-                          {medicine.category}
-                        </span>
-                      </div>
-                      
-                      <p className="text-gray-600 text-sm mb-4 line-clamp-2">{medicine.description}</p>
-                      
-                      {/* Medicine Details */}
-                      <div className="grid grid-cols-2 gap-3 mb-4 mt-auto">
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-500 flex items-center">
-                            <FaTags className="mr-1" /> Price
-                          </p>
-                          <p className="font-medium text-sm">${medicine.price}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-500 flex items-center">
-                            <FaBoxOpen className="mr-1" /> Quantity
-                          </p>
-                          <p className={`font-medium text-sm ${medicine.quantity < 10 ? 'text-yellow-600' : 'text-green-600'}`}>
-                            {medicine.quantity} {medicine.quantity < 10 && '(Low)'}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-500">Sellable</p>
-                          <div className="flex items-center">
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={medicine.can_be_sell}
-                                onChange={() => handleToggleCanBeSell(medicine.id, !medicine.can_be_sell)}
-                                className="sr-only peer"
-                              />
-                              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                            </label>
-                          </div>
-                        </div>
-                        {medicine.can_be_sell && (
-                          <div className="space-y-1">
-                            <p className="text-xs text-gray-500">Sell Qty</p>
-                            <p className="font-medium text-sm">{medicine.quantity_to_sell}</p>
-                          </div>
-                        )}
-                        {medicine.can_be_sell && (
-                          <div className="col-span-2 space-y-1">
-                            <p className="text-xs text-gray-500">Sell Price</p>
-                            <p className="font-medium text-sm">${medicine.price_sell}</p>
-                          </div>
-                        )}
-                        <div className="col-span-2 space-y-1">
-                          <p className="text-xs text-gray-500 flex items-center">
-                            <FaRegCalendarAlt className="mr-1" /> Expiry
-                          </p>
-                          <p className={`font-medium text-sm ${new Date(medicine.exp_date) < new Date() ? 'text-red-500' : 'text-gray-700'}`}>
-                            {new Date(medicine.exp_date).toLocaleDateString()}
-                            {new Date(medicine.exp_date) < new Date() && ' (Expired)'}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {/* Action Buttons */}
-                      <div className="mt-auto pt-3 border-t border-gray-100">
-                        <div className="flex justify-between gap-2">
-                          <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => openEditModal(medicine)}
-                            className="flex-1 bg-blue-50 text-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 transition-all duration-200 flex items-center justify-center text-xs sm:text-sm shadow-sm"
-                          >
-                            <FaEdit className="mr-1 text-xs sm:text-sm" /> Edit
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => handleDeleteMedicine(medicine.id)}
-                            className="flex-1 bg-red-50 text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-100 transition-all duration-200 flex items-center justify-center text-xs sm:text-sm shadow-sm"
-                          >
-                            <FaTrash className="mr-1 text-xs sm:text-sm" /> Delete
-                          </motion.button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+               {currentItems.map((medicine, index) => (
+  <motion.div
+    key={medicine.id}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.1 * index }}
+    className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col"
+  >
+    {/* Image Section */}
+   {/* Medicine Image */}
+<div className="relative h-40 bg-gray-100 overflow-hidden">
+  <img
+    src={medicine.image_url || "https://www.creativefabrica.com/wp-content/uploads/2020/07/17/Medicine-Logo-Graphics-4647232-1-1-580x386.jpg"}
+    alt={medicine.name}
+    className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+    onError={(e) => {
+      (e.target as HTMLImageElement).src = "https://www.creativefabrica.com/wp-content/uploads/2020/07/17/Medicine-Logo-Graphics-4647232-1-1-580x386.jpg";
+    }}
+  />
+  {medicine.exp_date && new Date(medicine.exp_date) < new Date() && (
+    <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-sm">
+      Expired
+    </span>
+  )}
+  {medicine.quantity < 10 && (
+    <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full shadow-sm">
+      Low Stock
+    </span>
+  )}
+</div>
+
+    {/* Content Section */}
+    <div className="p-4 flex flex-col flex-grow">
+      {/* Title Row */}
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
+          {medicine.name}
+        </h3>
+        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+          {medicine.category}
+        </span>
+      </div>
+
+      {/* Description */}
+      <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+        {medicine.description || "No description available"}
+      </p>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {/* Price */}
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500">Price</p>
+          <p className="font-medium text-blue-600">${medicine.price}</p>
+        </div>
+        
+        {/* Quantity */}
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500">In Stock</p>
+          <p className={`font-medium ${medicine.quantity < 10 ? 'text-amber-600' : 'text-green-600'}`}>
+            {medicine.quantity}
+          </p>
+        </div>
+        
+        {/* Expiry */}
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500">Expires</p>
+          <p className={`text-sm ${new Date(medicine.exp_date) < new Date() ? 'text-red-500' : 'text-gray-700'}`}>
+            {new Date(medicine.exp_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+      </div>
+
+      {/* Selling Info (conditional) */}
+      {medicine.can_be_sell && (
+        <div className="bg-gray-50 p-3 rounded-lg mb-4">
+          <div className="flex justify-between text-sm">
+            <div>
+              <p className="text-gray-500">Selling Price</p>
+              <p className="font-medium">${medicine.price_sell}</p>
+            </div>
+            <div>
+              <p className="text-gray-500">Available Qty</p>
+              <p className="font-medium">{medicine.quantity_to_sell}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toggle and Actions */}
+      <div className="mt-auto pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm text-gray-600">Available for sale</span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={medicine.can_be_sell}
+              onChange={() => handleToggleCanBeSell(medicine.id, !medicine.can_be_sell)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => openEditModal(medicine)}
+            className="flex-1 bg-white border border-blue-500 text-blue-500 hover:bg-blue-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <FaEdit size={14} /> Edit
+          </button>
+          <button
+            onClick={() => handleDeleteMedicine(medicine.id)}
+            className="flex-1 bg-white border border-red-500 text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <FaTrash size={14} /> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+))}
               </div>
 
               {/* Pagination Controls */}
@@ -905,7 +1008,7 @@ useEffect(() => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 backdrop-blur-sm bg-black bg-opacity-30 flex justify-center items-center p-2 sm:p-4 z-50"
+              className="fixed inset-0 backdrop-blur-sm  bg-opacity-30 flex justify-center items-center p-2 sm:p-4 z-50"
             >
               <motion.div
                 initial={{ scale: 0.95, y: 20 }}
@@ -964,14 +1067,10 @@ useEffect(() => {
                           required
                         >
                           <option value="">Select Category</option>
+                          <option value="Dental and oral agents">Dental and oral agents</option>
+                          <option value="Blood products">Blood products</option>
                           <option value="Antibiotics">Antibiotics</option>
-                          <option value="Painkillers">Painkillers</option>
-                          <option value="Vitamins">Vitamins</option>
-                          <option value="Antihistamines">Antihistamines</option>
-                          <option value="Antidepressants">Antidepressants</option>
-                          <option value="Cardiovascular">Cardiovascular</option>
-                          <option value="Gastrointestinal">Gastrointestinal</option>
-                          <option value="Other">Other</option>
+                          
                         </select>
                       </div>
                       
@@ -979,7 +1078,7 @@ useEffect(() => {
                       <div>
                         <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Price*</label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"></span>
                           <input
                             type="number"
                             name="price"
@@ -1065,7 +1164,7 @@ useEffect(() => {
                         <div>
                           <label className="block text-sm sm:text-base font-medium text-gray-700 mb-1">Selling Price*</label>
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"></span>
                             <input
                               type="number"
                               name="price_sell"

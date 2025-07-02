@@ -75,6 +75,8 @@ const AvailableMedicine: React.FC = () => {
   useEffect(() => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('pharmacyName');
+    localStorage.removeItem("pharmacy_id");
+
 
     if (!isLoggedIn()) {
       toast.error("You need to log in first.");
@@ -305,8 +307,11 @@ const AvailableMedicine: React.FC = () => {
         toast.error(`Failed to add pharmacy: ${errorData.message || "Unknown error"}`);
         return;
       }
-  
+ 
       const data: Pharmacy = await response.json();
+       if (data.id) {
+      localStorage.setItem("pharmacy_id", data.id.toString());
+    }
       setPharmacies([...pharmacies, data]);
       setIsModalOpen(false);
       setNewPharmacy({
@@ -616,8 +621,11 @@ const AvailableMedicine: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/pharmacy-login", { state: { pharmacyName: pharmacy.name } })}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center text-sm"
+              
+ onClick={() => {
+    localStorage.setItem("pharmacy_id", pharmacy.id.toString()); // حفظ ID الصيدلية
+    navigate("/medicine", { state: { pharmacyName: pharmacy.name } }); // التنقل
+  }}              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center text-sm"
             >
               <FaPills className="mr-2" />
               <span>View Medicines</span>

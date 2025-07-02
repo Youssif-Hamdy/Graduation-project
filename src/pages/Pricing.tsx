@@ -23,7 +23,6 @@ const Pricing: React.FC = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      navigate('/pharmacy-login');
     } else {
       const timer = setTimeout(() => {
         setIsPageLoaded(true);
@@ -37,43 +36,68 @@ const Pricing: React.FC = () => {
     setShowPaymentModal(true);
   };
 
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    try {
-      const pharmacyId = localStorage.getItem('pharmacyId');
-      
-      const response = await fetch('https://smart-pharma-net.vercel.app/exchange/subscribe/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          type: selectedPlan,
-          pharmacy: pharmacyId || 0
-        })
-      });
+ const handlePaymentSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
 
-      if (!response.ok) {
-        throw new Error('Failed to subscribe');
-      }
+  // Simulate payment processing delay
+  await new Promise(resolve => setTimeout(resolve, 1500));
 
-      const data = await response.json();
-      toast.success(`Subscribed to ${selectedPlan} plan successfully!`);
-      console.log('Subscription data:', data);
-      setShowPaymentModal(false);
-    } catch (error) {
-      console.error('Subscription error:', error);
-      toast.error('Failed to subscribe. Please try again.');
-    } finally {
+  const ownerToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('accessToken');
+  const pharmacyName = localStorage.getItem('pharmacyName') || "Unknown Pharmacy";
+
+  let token = '';
+  let apiUrl = '';
+
+  if (ownerToken) {
+    const pharmacyId = localStorage.getItem('pharmacy_id');
+    if (!pharmacyId) {
+      toast.error("Pharmacy ID is missing.");
       setIsLoading(false);
+      return;
     }
-  };
+    token = ownerToken;
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/subscripe/pharmacy/${pharmacyId}/`;
+  } else if (userToken) {
+    token = userToken;
+    apiUrl = `https://smart-pharma-net.vercel.app/exchange/subscripe/`;
+  } else {
+    toast.error("Authentication required.");
+    setIsLoading(false);
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        type: selectedPlan,
+        pharmacy: pharmacyName
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to subscribe');
+    }
+
+    const data = await response.json();
+    toast.success(`Subscribed to ${selectedPlan} plan successfully!`);
+    console.log('Subscription data:', data);
+    setShowPaymentModal(false);
+  } catch (error) {
+    console.error('Subscription error:', error);
+    // @ts-ignore
+    toast.error(error.message || 'Failed to subscribe. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handlePaymentInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
